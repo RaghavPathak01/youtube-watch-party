@@ -28,6 +28,23 @@ const getUserId = () => {
     return userId;
 };
 
+const AVATAR_COLORS = [
+    "#a78bfa", // Purple
+    "#22d3ee", // Cyan
+    "#fb923c", // Orange
+    "#4ade80", // Green
+    "#f472b6", // Pink
+];
+
+const getColorForUsername = (username: string) => {
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+        hash = username.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % AVATAR_COLORS.length;
+    return AVATAR_COLORS[index];
+};
+
 function Room() {
 
     const { roomId } = useParams();
@@ -319,9 +336,10 @@ function Room() {
 
         if (socket.connected) {
             joinRoom();
-        } else {
-            socket.once("connect", joinRoom);
         }
+        
+        // Use .on instead of .once so it auto-rejoins after sleep/disconnect!
+        socket.on("connect", joinRoom);
 
         return () => {
             socket.off("connect", joinRoom);
@@ -331,6 +349,9 @@ function Room() {
     useEffect(() => {
         const handleError = (data: { message: string }) => {
             alert(data.message);
+            if (data.message === "Room not found" || data.message === "You are not in a room") {
+                navigate("/");
+            }
         };
 
         socket.on("error_message", handleError);
@@ -338,7 +359,7 @@ function Room() {
         return () => {
             socket.off("error_message", handleError);
         };
-    }, []);
+    }, [navigate]);
 
     useEffect(() => {
         const handleNewMessage = (msg: ChatMessage) => {
@@ -500,10 +521,19 @@ function Room() {
             events: {
                 onStateChange: (event) => {
                     if (
-                        event.data === YT.PlayerState.BUFFERING ||
                         event.data === YT.PlayerState.UNSTARTED ||
                         event.data === YT.PlayerState.CUED
                     ) {
+                        return;
+                    }
+
+                    if (event.data === YT.PlayerState.BUFFERING) {
+                        if (canControlRef.current && expectedRemoteState.current === null) {
+                            // User clicked progress bar natively
+                            socket.emit("seek", {
+                                currentTime: playerRef.current.getCurrentTime(),
+                            });
+                        }
                         return;
                     }
 
@@ -527,7 +557,9 @@ function Room() {
                         setIsPlaying(true);
 
                         if (canControlRef.current) {
-                            socket.emit("play");
+                            socket.emit("play", {
+                                currentTime: playerRef.current.getCurrentTime(),
+                            });
                         }
                     }
 
@@ -535,7 +567,9 @@ function Room() {
                         setIsPlaying(false);
 
                         if (canControlRef.current) {
-                            socket.emit("pause");
+                            socket.emit("pause", {
+                                currentTime: playerRef.current.getCurrentTime(),
+                            });
                         }
                     }
                 },
@@ -1056,12 +1090,31 @@ function Room() {
 
 
                     <div className="chat-messages">
-                        {chatMessages.map((msg) => (
-                            <div className="chat-message" key={msg.id}>
-                                <strong>{msg.username}</strong>
-                                <p>{msg.message}</p>
-                            </div>
-                        ))}
+                        {chatMessages.map((msg, index) => {
+                            const isCurrentUser = msg.username === localStorage.getItem("watchPartyUsername");
+                            const showAvatar = index === 0 || chatMessages[index - 1].username !== msg.username;
+                            const accentColor = getColorForUsername(msg.username);
+
+                            return (
+                                <div 
+                                    className={`chat-message ${isCurrentUser ? 'current-user-message' : ''} ${!showAvatar ? 'consecutive-message' : ''}`} 
+                                    key={msg.id}
+                                    style={{ "--accent-color": accentColor } as React.CSSProperties}
+                                >
+                                    {showAvatar ? (
+                                        <div className="chat-avatar" style={{ backgroundColor: accentColor }}>
+                                            {msg.username.charAt(0)}
+                                        </div>
+                                    ) : (
+                                        <div className="chat-avatar-placeholder"></div>
+                                    )}
+                                    <div className="chat-message-content">
+                                        {showAvatar && <strong>{msg.username}</strong>}
+                                        <p>{msg.message}</p>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
 
                     <div className="chat-input">

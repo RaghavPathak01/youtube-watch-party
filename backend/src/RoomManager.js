@@ -31,6 +31,10 @@ export class RoomManager {
     return this.rooms.get(roomId);
   }
 
+  deleteRoom(roomId) {
+    this.rooms.delete(roomId);
+  }
+
   addParticipant(roomId, socketId, userId, username) {
     const room = this.getRoom(roomId);
 

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import socket from "../services/socket";
+import { Header } from "../components/Header";
 
 
 const getUserId = () => {
@@ -22,6 +23,12 @@ function Home() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [roomId, setRoomId] = useState("");
+  const roomIdInputRef = useRef<HTMLInputElement>(null);
+
+  const scrollToQuickJoin = () => {
+    roomIdInputRef.current?.focus();
+    roomIdInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
 
   const createRoom = () => {
@@ -85,23 +92,7 @@ function Home() {
     <div className="home-page">
 
       {/* Header */}
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-icon">W</div>
-          <span>WatchTogether</span>
-        </div>
-
-        <nav>
-          <a className="active">Home</a>
-          <a>Discover</a>
-          <a>About</a>
-        </nav>
-
-        <div className="profile">
-          <div className="profile-dot"></div>
-          <span>Guest</span>
-        </div>
-      </header>
+      <Header />
 
 
       {/* Hero */}
@@ -128,6 +119,7 @@ function Home() {
             </p>
 
             <div className="hero-name-input">
+                <label className="input-label">Your Name</label>
                 <input
                     type="text"
                     placeholder="Enter your name"
@@ -141,7 +133,7 @@ function Home() {
                 + Start a Watch Party
               </button>
 
-              <button className="secondary-btn">
+              <button className="secondary-btn" onClick={scrollToQuickJoin}>
                 Join with Room ID
               </button>
             </div>
@@ -244,14 +236,8 @@ function Home() {
           <div className="join-form">
 
             <input
-                type="text"
-                placeholder="Enter your name"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-            />
-
-            <input
               type="text"
+              ref={roomIdInputRef}
               placeholder="Enter room ID"
               value={roomId}
               onChange={(e) => setRoomId(e.target.value)}

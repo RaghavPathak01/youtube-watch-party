@@ -232,6 +232,9 @@ export function setupSocketHandlers(io, socket, roomManager) {
         host: newHost,
       });
     }
+  } else {
+    roomManager.deleteRoom(room.roomId);
+    console.log(`Room ${room.roomId} deleted (empty)`);
   }
 
   return result;
@@ -273,6 +276,12 @@ export function setupSocketHandlers(io, socket, roomManager) {
       room,
       participant,
       (room, disconnectedParticipant, newHost) => {
+        if (room.isEmpty()) {
+            roomManager.deleteRoom(room.roomId);
+            console.log(`Room ${room.roomId} deleted (empty after disconnect timeout)`);
+            return;
+        }
+
         io.to(room.roomId).emit(
           "participants_updated",
           {
@@ -296,8 +305,12 @@ export function setupSocketHandlers(io, socket, roomManager) {
     );
   });
 
-  const playVideo = (room) => {
-  room.currentTime = room.getCurrentTime();
+  const playVideo = (room, providedTime) => {
+  if (typeof providedTime === "number") {
+    room.currentTime = providedTime;
+  } else {
+    room.currentTime = room.getCurrentTime();
+  }
   room.playState = "playing";
   room.lastUpdatedAt = Date.now();
 
@@ -308,7 +321,7 @@ export function setupSocketHandlers(io, socket, roomManager) {
 };
 
   // Play Event
-  socket.on("play", () => {
+  socket.on("play", (data = {}) => {
     const room = roomManager.getRoomBySocket(socket.id);
 
     if (!room) {
@@ -329,12 +342,16 @@ export function setupSocketHandlers(io, socket, roomManager) {
         return;
     }
 
-    playVideo(room);
+    playVideo(room, data.currentTime);
   });
 
 
-const pauseVideo = (room) => {
-  room.currentTime = room.getCurrentTime();
+const pauseVideo = (room, providedTime) => {
+  if (typeof providedTime === "number") {
+    room.currentTime = providedTime;
+  } else {
+    room.currentTime = room.getCurrentTime();
+  }
   room.playState = "paused";
   room.lastUpdatedAt = Date.now();
 
@@ -345,7 +362,7 @@ const pauseVideo = (room) => {
 };
 
   // Pause Event
-  socket.on("pause", () => {
+  socket.on("pause", (data = {}) => {
     const room = roomManager.getRoomBySocket(socket.id);
 
     if (!room) {
@@ -366,7 +383,7 @@ const pauseVideo = (room) => {
         return;
     }
 
-    pauseVideo(room);
+    pauseVideo(room, data.currentTime);
   });
 
   // seek event
