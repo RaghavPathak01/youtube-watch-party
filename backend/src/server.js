@@ -31,7 +31,19 @@ if (process.env.RENDER_EXTERNAL_URL) {
   allowedOrigins.push(process.env.RENDER_EXTERNAL_URL);
 }
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "script-src": ["'self'", "https://www.youtube.com", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:", "https://img.youtube.com", "https://i.ytimg.com"],
+        "frame-src": ["'self'", "https://www.youtube.com", "https://www.youtube-nocookie.com"],
+        "connect-src": ["'self'", "ws:", "wss:"],
+      },
+    },
+  })
+);
 
 app.use(
   cors({

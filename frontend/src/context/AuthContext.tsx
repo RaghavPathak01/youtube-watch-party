@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { API_URL } from '../config';
 import socket from '../services/socket';
@@ -42,12 +42,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
+  const isInitialMount = useRef(true);
+
   // Reconnect socket when user changes (login/logout) to pick up new cookies
   useEffect(() => {
-    if (!isLoading) {
-      socket.disconnect();
-      socket.connect();
+    if (isLoading) return;
+    
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
     }
+
+    socket.disconnect();
+    setTimeout(() => socket.connect(), 50);
   }, [user, isLoading]);
 
   return (
