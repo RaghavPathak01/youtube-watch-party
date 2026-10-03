@@ -75,6 +75,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
                 
                 playerRef.current = new window.YT.Player("youtube-player-iframe", {
                     videoId,
+                    width: '100%',
+                    height: '100%',
                     playerVars: {
                         controls: 0,
                         disablekb: 1,
@@ -88,7 +90,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
                             onReady();
                             setTimeout(checkAndEmitTitle, 500); // Sometimes it takes a moment to be available
                         },
-                        onStateChange: (event) => {
+                        onStateChange: (event: any) => {
                             checkAndEmitTitle();
                             if (event.data === window.YT.PlayerState.PLAYING) {
                                 if (timeUpdateInterval.current) clearInterval(timeUpdateInterval.current);
@@ -108,7 +110,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
                             }
                         }
                     }
-                });
+                } as any);
             };
 
             if (window.YT && window.YT.Player) {

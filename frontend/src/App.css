@@ -1458,6 +1458,9 @@
 
 .room-page {
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 
   background:
     radial-gradient(
@@ -1479,6 +1482,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  box-sizing: border-box;
+  width: 100%;
 
   padding: 0 28px;
 
@@ -1587,24 +1592,6 @@
 
 
 /* MAIN */
-
-.room-content {
-  width: 100%;
-  max-width: 1500px;
-  margin: 24px auto;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 24px;
-  padding: 0 24px;
-}
-
-@media (max-width: 1024px) {
-  .room-content {
-    grid-template-columns: 1fr;
-    padding: 0 16px;
-  }
-}
-
 
 /* PANELS */
 
@@ -2317,15 +2304,7 @@
 
 /* ================= ROOM RESPONSIVE ================= */
 
-@media (max-width: 1100px) {
-    .room-content {
-        grid-template-columns: 190px minmax(0, 1fr);
-    }
-
-    .chat-panel {
-        display: none;
-    }
-}
+/* Removed legacy 1100px room-content media query */
 
 @media (max-width: 768px) {
     .room-header {
@@ -2403,14 +2382,7 @@
         padding: 0 16px;
     }
 
-    .room-content {
-        width: 94%;
-        margin: 18px auto;
-
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-    }
+    /* Removed legacy 768px room-content override */
 
     .participants-panel {
         min-height: auto;
@@ -2442,10 +2414,7 @@
 @media (max-width: 520px) {
     /* Removed room header specifics to use 768px layout */
 
-    .room-content {
-        width: 92%;
-        margin: 14px auto;
-    }
+    /* Removed legacy 520px room-content override */
 
     .participants-list {
         grid-template-columns: 1fr;
@@ -3353,6 +3322,8 @@
     align-items: flex-start;
     gap: 24px;
     padding: 24px;
+    box-sizing: border-box;
+    min-width: 0;
 }
 .room-video-area {
     flex: 1;
@@ -3360,16 +3331,31 @@
     flex-direction: column;
     gap: 16px;
     min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 .room-panel-area {
-    width: 380px;
+    width: 360px;
     flex-shrink: 0;
+    min-width: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+@media (max-width: 1024px) {
+    .room-content {
+        gap: 16px;
+        padding: 16px;
+    }
+    .room-panel-area {
+        width: 320px;
+    }
 }
 @media (max-width: 900px) {
     .room-content {
         flex-direction: column;
-        padding: 16px;
-        gap: 16px;
+        padding: 12px;
     }
     .room-panel-area {
         width: 100%;
@@ -3802,6 +3788,9 @@ body.light-theme ::-webkit-scrollbar-thumb:hover {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .now-playing-meta {
@@ -3809,6 +3798,7 @@ body.light-theme ::-webkit-scrollbar-thumb:hover {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: 1;
 }
 
 .now-playing-label {
@@ -3827,7 +3817,7 @@ body.light-theme ::-webkit-scrollbar-thumb:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 400px;
+  max-width: 100%;
 }
 
 /* ================================================== */
@@ -4109,4 +4099,21 @@ body.light-theme .password-toggle-btn:hover { color: var(--text-primary); }
         padding: 24px !important;
         margin-top: 24px !important;
     }
+}
+
+/* ================================================== */
+/* YOUTUBE IFRAME API — OVERRIDE HARDCODED DIMENSIONS */
+/* ================================================== */
+/* YouTube IFrame API replaces the placeholder div with an <iframe>     */
+/* element that has hardcoded width="640" height="390" HTML attributes.  */
+/* These inline attributes override normal CSS, so !important is needed. */
+/* The ID #youtube-player-iframe transfers to the generated <iframe>.    */
+/* The descendant selector is a fallback in case the API nests it.       */
+
+#youtube-player-iframe,
+.youtube-player-wrapper iframe {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  display: block;
 }

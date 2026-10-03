@@ -31,7 +31,7 @@ export function RoomPanel({
     ];
 
     return (
-        <aside className="room-panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <aside className="room-panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box', width: '100%', minWidth: 0, flex: 1, minHeight: 0 }}>
             {/* Tabs */}
             <div className="panel-tabs" style={{ display: 'flex' }}>
                 {tabs.map((tab) => (
@@ -48,6 +48,9 @@ export function RoomPanel({
                             letterSpacing: '0.2px',
                             cursor: 'pointer',
                             transition: 'all 0.2s ease',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
                         }}
                     >
                         {tab.label}
@@ -67,7 +70,7 @@ export function RoomPanel({
             </div>
 
             {/* Content */}
-            <div className="panel-content" style={{ padding: '16px', flex: 1 }}>
+            <div className="panel-content" style={{ padding: '16px', flex: 1, minWidth: 0, width: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
                 {activeTab === "people" && <PeoplePanel {...participantsProps} />}
                 {activeTab === "chat" && <ChatPanel {...chatProps} />}
                 {activeTab === "queue" && <QueuePanel {...queueProps} />}

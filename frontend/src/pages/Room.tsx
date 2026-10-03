@@ -341,7 +341,7 @@ export default function Room() {
 
             <main className="room-content">
                 <div className="room-video-area">
-                    <div className="youtube-placeholder" style={{ width: '100%', aspectRatio: '16/9', position: 'relative', borderRadius: '12px', overflow: 'hidden', background: '#000', marginBottom: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+                    <div className="youtube-placeholder" style={{ width: '100%', maxWidth: '100%', aspectRatio: '16/9', position: 'relative', borderRadius: '12px', overflow: 'hidden', background: '#000', marginBottom: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
                         <FloatingReactions 
                             reactions={floatingReactions} 
                             onComplete={(id) => setFloatingReactions(prev => prev.filter(r => r.id !== id))} 

@@ -16,6 +16,7 @@ interface ActiveRoom {
   visibility: string;
   watching: number;
   host: string;
+  hostId: string;
 }
 
 export default function Home() {
@@ -73,6 +74,11 @@ export default function Home() {
     }
 
     if (room.visibility === "private") {
+      if (user.id === room.hostId) {
+        socket.emit("join_room", { discoverId: room.discoverId });
+        return;
+      }
+      
       const code = await showPrompt("Enter private room code:");
       if (!code) return;
       socket.emit("join_room", { roomId: code.trim() });

@@ -47,7 +47,9 @@ export function VideoControls({
             padding: '16px 20px', 
             borderRadius: '16px',
             border: '1px solid rgba(255, 255, 255, 0.05)',
-            marginBottom: '16px'
+            marginBottom: '16px',
+            boxSizing: 'border-box',
+            width: '100%'
         }}>
             <button 
                 onClick={onTogglePlayback} 
@@ -63,7 +65,7 @@ export function VideoControls({
                 {isPlaying ? "❚❚" : "▶"}
             </button>
 
-            <span style={{ color: '#a1a1aa', fontSize: '13px', fontWeight: '500', flexShrink: 0, minWidth: '80px' }}>
+            <span style={{ color: '#a1a1aa', fontSize: '13px', fontWeight: '500', flexShrink: 0, minWidth: '80px', whiteSpace: 'nowrap' }}>
                 {formatTime(currentTime)} / {formatTime(duration)}
             </span>
 
@@ -71,7 +73,7 @@ export function VideoControls({
                 className="progress-bar-container" 
                 onClick={handleProgressClick}
                 style={{
-                    flex: 1, height: '6px', background: 'rgba(255, 255, 255, 0.1)',
+                    flex: 1, minWidth: 0, height: '6px', background: 'rgba(255, 255, 255, 0.1)',
                     borderRadius: '3px', cursor: 'pointer', position: 'relative'
                 }}
             >

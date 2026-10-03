@@ -32,7 +32,7 @@ export function VideoInput({ onLoadVideo }: VideoInputProps) {
     };
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '6px', boxSizing: 'border-box', width: '100%', minWidth: 0 }}>
             <div style={{ padding: '0 12px', color: '#a1a1aa' }}>🔗</div>
             <input
                 type="text"
@@ -44,12 +44,14 @@ export function VideoInput({ onLoadVideo }: VideoInputProps) {
                 }}
                 style={{
                     flex: 1,
+                    minWidth: 0,
                     background: 'transparent',
                     border: 'none',
                     color: '#f4f4f5',
                     outline: 'none',
                     fontSize: '14px',
-                    padding: '8px 0'
+                    padding: '8px 0',
+                    boxSizing: 'border-box'
                 }}
             />
             <button 

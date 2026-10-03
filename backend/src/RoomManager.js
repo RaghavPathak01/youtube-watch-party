@@ -35,9 +35,11 @@ export class RoomManager {
     const activeRooms = [];
     for (const room of this.rooms.values()) {
         let hostName = "Unknown";
+        let hostId = null;
         for (const p of room.participants.values()) {
           if (p.role === "host") {
             hostName = p.username;
+            hostId = p.userId;
             break;
           }
         }
@@ -49,10 +51,20 @@ export class RoomManager {
           genre: room.genre,
           visibility: room.visibility,
           watching: room.participants.size,
-          host: hostName
+          host: hostName,
+          hostId: hostId
         });
     }
     return activeRooms;
+  }
+
+  getRoomByDiscoverId(discoverId) {
+    for (const room of this.rooms.values()) {
+      if (room.discoverId === discoverId) {
+        return room;
+      }
+    }
+    return null;
   }
 
   deleteRoom(roomId) {

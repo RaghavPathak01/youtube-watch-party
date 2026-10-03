@@ -105,19 +105,50 @@ export function setupSocketHandlers(io, socket, roomManager) {
 
 
   // Join an existing room
-  socket.on("join_room", ({ roomId } = {}) => {
+  socket.on("join_room", ({ roomId, discoverId } = {}) => {
     if (isRateLimited(socket, "join_room", 10, 10000)) {
       socket.emit("error_message", { message: "Too many requests. Please slow down." });
       return;
     }
 
-    const cleanRoomId = String(roomId || "")
-      .trim()
-      .toUpperCase()
-      .slice(0, 20);
-
     const cleanUserId = String(socket.user.userId);
     const cleanUsername = String(socket.user.name).slice(0, 30);
+
+    let cleanRoomId = "";
+    let room = null;
+
+    if (discoverId) {
+      room = roomManager.getRoomByDiscoverId(discoverId);
+      if (!room) {
+        socket.emit("error_message", { message: "Room not found" });
+        return;
+      }
+      cleanRoomId = room.roomId;
+      
+      // If it's a private room, only the host can join via discoverId
+      if (room.visibility === "private") {
+        let isHost = false;
+        for (const p of room.participants.values()) {
+          if (p.role === "host" && p.userId === cleanUserId) isHost = true;
+        }
+        if (room.pendingDisconnects) {
+          for (const p of room.pendingDisconnects.values()) {
+            if (p.role === "host" && p.userId === cleanUserId) isHost = true;
+          }
+        }
+        if (!isHost) {
+          socket.emit("error_message", { message: "Private room code required" });
+          return;
+        }
+      }
+    } else {
+      cleanRoomId = String(roomId || "").trim().toUpperCase().slice(0, 20);
+      room = roomManager.getRoom(cleanRoomId);
+      if (!room) {
+        socket.emit("error_message", { message: "Room not found" });
+        return;
+      }
+    }
 
     if (!cleanRoomId || !cleanUserId || !cleanUsername) {
       socket.emit("error_message", {
@@ -162,16 +193,6 @@ export function setupSocketHandlers(io, socket, roomManager) {
 
         return;
       }
-    }
-
-    const room = roomManager.getRoom(cleanRoomId);
-
-    if (!room) {
-      socket.emit("error_message", {
-        message: "Room not found",
-      });
-
-      return;
     }
 
     const reconnectingParticipant = room.pendingDisconnects?.get(cleanUserId);

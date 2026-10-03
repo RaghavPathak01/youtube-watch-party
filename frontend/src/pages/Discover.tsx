@@ -15,6 +15,7 @@ interface ActiveRoom {
   visibility: string;
   watching: number;
   host: string;
+  hostId: string;
 }
 
 export default function Discover() {
@@ -90,6 +91,11 @@ export default function Discover() {
     }
 
     if (room.visibility === "private") {
+        if (user.id === room.hostId) {
+            socket.emit("join_room", { discoverId: room.discoverId });
+            return;
+        }
+
         setPrivateError("");
         setPrivateRoomCode("");
         setShowPrivateModal(true);

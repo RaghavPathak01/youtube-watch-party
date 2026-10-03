@@ -71,9 +71,9 @@ export function RoomHeader({
 
     return (
         <header className="room-header">
-            <div className="brand" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <img src="https://em-content.zobj.net/source/apple/354/clapper-board_1f3ac.png" alt="Room Icon" style={{ width: '28px', height: '28px' }} />
-                <span style={{ fontSize: '18px', fontWeight: 'bold', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{roomName}</span>
+            <div className="brand" style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <img src="https://em-content.zobj.net/source/apple/354/clapper-board_1f3ac.png" alt="Room Icon" style={{ width: '28px', height: '28px', flexShrink: 0 }} />
+                <span style={{ fontSize: '18px', fontWeight: 'bold', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{roomName}</span>
                 {roomId && (
                     <button
                         onClick={() => {

@@ -6,7 +6,7 @@ export function ReactionBar({ onReact }: ReactionBarProps) {
     const reactions = ["😂", "❤️", "🔥", "😲", "👏", "👎"];
 
     return (
-        <div className="reaction-bar" style={{ display: 'flex', gap: '8px', padding: '12px 0' }}>
+        <div className="reaction-bar" style={{ display: 'flex', gap: '8px', padding: '12px 0', flexWrap: 'wrap' }}>
             {reactions.map((emoji) => (
                 <button
                     key={emoji}
