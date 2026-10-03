@@ -7,13 +7,15 @@ export function socketAuth(socket, next) {
     const token = cookies.token;
 
     if (!token) {
-      return next(new Error('Authentication required: No token provided'));
+      socket.user = { id: `anon-${socket.id}`, name: "Anonymous", email: null };
+      return next();
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     socket.user = decoded; // Contains userId, email, name
     next();
   } catch (error) {
-    return next(new Error('Authentication failed: Invalid or expired token'));
+    socket.user = { id: `anon-${socket.id}`, name: "Anonymous", email: null };
+    return next();
   }
 }

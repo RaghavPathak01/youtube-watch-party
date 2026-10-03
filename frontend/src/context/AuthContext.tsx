@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { API_URL } from '../config';
+import socket from '../services/socket';
 
 interface User {
   id: string;
@@ -40,6 +41,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       });
   }, []);
+
+  // Reconnect socket when user changes (login/logout) to pick up new cookies
+  useEffect(() => {
+    if (!isLoading) {
+      socket.disconnect();
+      socket.connect();
+    }
+  }, [user, isLoading]);
 
   return (
     <AuthContext.Provider value={{ user, setUser, isLoading, isAuthModalOpen, setIsAuthModalOpen }}>
