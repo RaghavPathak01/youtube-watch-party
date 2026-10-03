@@ -24,11 +24,25 @@ const httpServer = createServer(app);
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
+// In production on Render, frontend is served from the same origin.
+// Allow both the explicit FRONTEND_URL and the server's own origin.
+const allowedOrigins = [FRONTEND_URL];
+if (process.env.RENDER_EXTERNAL_URL) {
+  allowedOrigins.push(process.env.RENDER_EXTERNAL_URL);
+}
+
 app.use(helmet());
 
 app.use(
   cors({
-    origin: FRONTEND_URL,
+    origin: function(origin, callback) {
+      // Allow requests with no origin (same-origin, mobile apps, curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
   })
 );
@@ -40,7 +54,13 @@ app.use(express.static(path.join(__dirname, "../../frontend/dist")));
 
 const io = new Server(httpServer, {
   cors: {
-    origin: FRONTEND_URL,
+    origin: function(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
   },
 });
