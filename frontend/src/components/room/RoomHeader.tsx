@@ -71,7 +71,7 @@ export function RoomHeader({
 
     return (
         <header className="room-header">
-            <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div className="brand" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <img src="https://em-content.zobj.net/source/apple/354/clapper-board_1f3ac.png" alt="Room Icon" style={{ width: '28px', height: '28px' }} />
                 <span style={{ fontSize: '18px', fontWeight: 'bold', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{roomName}</span>
                 {roomId && (
@@ -98,7 +98,7 @@ export function RoomHeader({
                 )}
             </div>
 
-            <div className="room-info" style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="room-info" style={{ flex: '0 0 auto', display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
 
                 {/* GENRE custom dropdown */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -213,7 +213,7 @@ export function RoomHeader({
                 </div>
             </div>
 
-            <div className="room-actions desktop-room-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div className="room-actions desktop-room-actions" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '16px' }}>
                 <div ref={dropdownRef} style={{ position: 'relative' }}>
                     <button 
                         onClick={() => setIsDropdownOpen(!isDropdownOpen)}

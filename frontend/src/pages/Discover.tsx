@@ -168,48 +168,52 @@ export default function Discover() {
               </div>
             ))}
           </div>
-        ) : (
+        ) : !showCreateForm ? (
           <div className="empty-state">
             <h3>No rooms available</h3>
             <p>Be the first to start a watch party.</p>
             <button className="primary-btn" onClick={() => setShowCreateForm(true)}>Start a Watch Party</button>
           </div>
-        )}
+        ) : null}
 
         {/* Create Room Section */}
-        {rooms.length > 0 && (
-          <section className="create-room-section" style={{ marginTop: '40px', padding: '40px 20px', background: 'rgba(35, 36, 39, 0.4)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
+        {(rooms.length > 0 || showCreateForm) && (
+          <section className="create-room-section" style={{ maxWidth: '680px', width: '90%', margin: '40px auto', padding: '40px', background: 'rgba(35, 36, 39, 0.4)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'left', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', maxHeight: '90vh', overflowY: 'auto', boxSizing: 'border-box' }}>
           {showCreateForm ? (
-              <div className="create-room-form" style={{ maxWidth: '400px', margin: '0 auto', textAlign: 'left' }}>
-                  <div className="hero-name-input">
-                      <label className="input-label">Room Name</label>
-                      <input type="text" placeholder="Friday Movie Night" value={roomName} onChange={(e) => setRoomName(e.target.value)} />
+              <div className="create-room-form" style={{ width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
+                  <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '32px', color: '#f4f4f5' }}>Start a Watch Party</h2>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
+                      <label className="input-label" style={{ marginBottom: 0 }}>Room Name</label>
+                      <input type="text" className="hero-name-input-field" placeholder="Friday Movie Night" value={roomName} onChange={(e) => setRoomName(e.target.value)} style={{ width: '100%', height: '52px', boxSizing: 'border-box' }} />
                   </div>
-                  <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
-                      <div className="hero-name-input" style={{ flex: 1, marginBottom: 0 }}>
-                          <label className="input-label">Genre</label>
-                          <select value={genre} onChange={(e) => setGenre(e.target.value)} style={{ width: '100%', padding: '14px 16px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none', cursor: 'pointer', WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' }}>
-                              <option value="Movies" style={{ background: '#17181b' }}>Movies</option>
-                              <option value="Gaming" style={{ background: '#17181b' }}>Gaming</option>
-                              <option value="Music" style={{ background: '#17181b' }}>Music</option>
-                              <option value="Education" style={{ background: '#17181b' }}>Education</option>
-                              <option value="Sports" style={{ background: '#17181b' }}>Sports</option>
+                  
+                  <div className="create-room-cols">
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <label className="input-label" style={{ marginBottom: 0 }}>Genre</label>
+                          <select className="hero-name-input-field" value={genre} onChange={(e) => setGenre(e.target.value)} style={{ width: '100%', height: '52px', boxSizing: 'border-box' }}>
+                              <option value="Movies">Movies</option>
+                              <option value="Gaming">Gaming</option>
+                              <option value="Music">Music</option>
+                              <option value="Education">Education</option>
+                              <option value="Sports">Sports</option>
                           </select>
                       </div>
-                      <div className="hero-name-input" style={{ flex: 1, marginBottom: 0 }}>
-                          <label className="input-label">Visibility</label>
-                          <select value={visibility} onChange={(e) => setVisibility(e.target.value)} style={{ width: '100%', padding: '14px 16px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none', cursor: 'pointer', WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' }}>
-                              <option value="private" style={{ background: '#17181b' }}>Private</option>
-                              <option value="public" style={{ background: '#17181b' }}>Public</option>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <label className="input-label" style={{ marginBottom: 0 }}>Visibility</label>
+                          <select className="hero-name-input-field" value={visibility} onChange={(e) => setVisibility(e.target.value)} style={{ width: '100%', height: '52px', boxSizing: 'border-box' }}>
+                              <option value="private">Private</option>
+                              <option value="public">Public</option>
                           </select>
                       </div>
                   </div>
-                  <button className="primary-btn" onClick={createRoom} style={{ width: '100%' }}>
+                  
+                  <button className="primary-btn" onClick={createRoom} style={{ width: '100%', height: '52px', fontSize: '16px', fontWeight: '600' }}>
                       Start a Watch Party
                   </button>
               </div>
           ) : (
-              <div>
+              <div style={{ textAlign: 'center' }}>
                   <h3 style={{ fontSize: '20px', marginBottom: '8px' }}>Don't have a room?</h3>
                   <p style={{ color: '#a1a1aa', marginBottom: '24px' }}>Create your own watch party and invite your friends.</p>
                   <button className="primary-btn" onClick={() => setShowCreateForm(true)}>

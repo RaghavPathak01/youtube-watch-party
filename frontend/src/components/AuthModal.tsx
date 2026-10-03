@@ -93,9 +93,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const modalContent = (
     <div className="auth-modal-overlay" onClick={onClose}>
       <div className="auth-modal-content" onClick={(e) => e.stopPropagation()}>
-        <button className="auth-close-btn" onClick={onClose}>✕</button>
+        <button className="auth-close-btn" onClick={onClose} aria-label="Close">✕</button>
         
-        <h2>{isLogin ? "Login" : "Sign Up"}</h2>
+        <h2 className="auth-title">{isLogin ? "Login" : "Sign Up"}</h2>
         <p className="auth-subtitle">
           {isLogin 
             ? "Enter your email and password to login." 
@@ -177,11 +177,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
           {isLogin && (
             <div className="auth-form-row">
-              <label className="auth-toggle-switch-label">
-                <div className="auth-toggle-switch">
-                  <input type="checkbox" disabled={isLoading} />
-                  <span className="slider"></span>
-                </div>
+              <label className="auth-checkbox-label">
+                <input type="checkbox" className="auth-checkbox" disabled={isLoading} />
                 <span>Remember me</span>
               </label>
               <a href="#" className="auth-forgot-link" onClick={(e) => e.preventDefault()}>Forgot password?</a>
@@ -189,20 +186,20 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           )}
 
           <div className="auth-footer">
-            <span className="auth-toggle-text">
-              {isLogin ? "Already have account? " : "Already have an account? "}
+            <button type="submit" className="primary-btn auth-submit-btn" disabled={isLoading}>
+              {isLoading ? "Please wait..." : (isLogin ? "Login" : "Sign Up")}
+            </button>
+            <div className="auth-switch-text">
+              {isLogin ? "Don't have an account? " : "Already have an account? "}
               <button 
                 type="button" 
-                className="auth-toggle-btn"
+                className="auth-switch-btn"
                 onClick={() => setIsLogin(!isLogin)}
                 disabled={isLoading}
               >
                 {isLogin ? "Register here." : "Login here."}
               </button>
-            </span>
-            <button type="submit" className="auth-submit-btn" disabled={isLoading}>
-              {isLoading ? "Please wait..." : (isLogin ? "Login" : "Sign Up")}
-            </button>
+            </div>
           </div>
         </form>
       </div>

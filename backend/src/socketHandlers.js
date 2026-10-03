@@ -1038,6 +1038,25 @@ socket.on("remove_participant", ({ targetSocketId } = {}) => {
 
 // Host Transfer
 
+  // Reaction
+  socket.on("send_reaction", ({ emoji } = {}) => {
+    if (isRateLimited(socket, "send_reaction", 10, 1000)) {
+      return;
+    }
+    const roomId = roomManager.getRoomBySocket(socket.id)?.roomId;
+    if (!roomId) return;
+
+    const room = roomManager.getRoom(roomId);
+    if (!room) return;
+
+    if (!room.getParticipant(socket.id)) return;
+
+    const validEmojis = ["😂", "❤️", "🔥", "😲", "👏", "👎"];
+    if (!validEmojis.includes(emoji)) return;
+
+    io.to(roomId).emit("reaction", { emoji });
+  });
+
   // Chat message
   socket.on("send_chat_message", ({ message } = {}) => {
     if (isRateLimited(socket, "send_chat_message", 5, 1000)) {

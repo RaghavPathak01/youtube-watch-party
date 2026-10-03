@@ -15,10 +15,11 @@ interface YouTubePlayerProps {
     onTimeUpdate: (currentTime: number, duration: number) => void;
     onReady: () => void;
     onEnded?: () => void;
+    onTitleUpdate?: (title: string) => void;
 }
 
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
-    ({ videoId, onTimeUpdate, onReady, onEnded }, ref) => {
+    ({ videoId, onTimeUpdate, onReady, onEnded, onTitleUpdate }, ref) => {
         const playerRef = useRef<YT.Player | null>(null);
         const containerRef = useRef<HTMLDivElement>(null);
         const timeUpdateInterval = useRef<number | null>(null);
@@ -60,6 +61,15 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
                 document.body.appendChild(script);
             }
 
+            const checkAndEmitTitle = () => {
+                if (playerRef.current && typeof (playerRef.current as any).getVideoData === 'function') {
+                    const data = (playerRef.current as any).getVideoData();
+                    if (data && data.title) {
+                        onTitleUpdate?.(data.title);
+                    }
+                }
+            };
+
             const initPlayer = () => {
                 if (!containerRef.current) return;
                 
@@ -76,8 +86,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
                     events: {
                         onReady: () => {
                             onReady();
+                            setTimeout(checkAndEmitTitle, 500); // Sometimes it takes a moment to be available
                         },
                         onStateChange: (event) => {
+                            checkAndEmitTitle();
                             if (event.data === window.YT.PlayerState.PLAYING) {
                                 if (timeUpdateInterval.current) clearInterval(timeUpdateInterval.current);
                                 timeUpdateInterval.current = window.setInterval(() => {

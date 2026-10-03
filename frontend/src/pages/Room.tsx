@@ -34,6 +34,7 @@ export default function Room() {
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [videoTitle, setVideoTitle] = useState("");
     const [isVideoMaximized, setIsVideoMaximized] = useState(false);
     
     // -- Other State --
@@ -49,6 +50,11 @@ export default function Room() {
     const isHost = currentUser?.role === "host";
     const isModerator = currentUser?.role === "moderator";
     const canControl = isHost || isModerator;
+
+    // Reset title when video is removed
+    useEffect(() => {
+        if (!videoId) setVideoTitle("");
+    }, [videoId]);
 
 
     // ------------------------------------------
@@ -351,6 +357,7 @@ export default function Room() {
                                 onReady={() => {
                                     // Player ready logic if needed
                                 }}
+                                onTitleUpdate={setVideoTitle}
                                 onEnded={() => {
                                     if (canControl) {
                                         socket.emit("video_ended", { videoId });
@@ -380,15 +387,14 @@ export default function Room() {
                             {hasVideo && (
                                 <img src={`https://img.youtube.com/vi/${videoId}/default.jpg`} style={{ width: '72px', height: '40px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} alt="Thumbnail" />
                             )}
-                            <div style={{ minWidth: 0 }}>
+                            <div style={{ minWidth: 0, overflow: 'hidden' }}>
                                 <span className="now-playing-label">Now playing</span>
-                                <h2 className="now-playing-title">{hasVideo ? "YouTube Video" : "Ready to watch together?"}</h2>
+                                <h2 className="now-playing-title" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                                    {hasVideo ? (videoTitle || "Ready to watch together?") : "Ready to watch together?"}
+                                </h2>
                             </div>
                         </div>
                         <ReactionBar onReact={(emoji) => {
-                            const id = Math.random().toString(36).substr(2, 9) + Date.now();
-                            const left = 20 + Math.random() * 60;
-                            setFloatingReactions(prev => [...prev, { id, emoji, left }]);
                             socket.emit("send_reaction", { emoji });
                         }} />
                     </div>
