@@ -18,9 +18,9 @@ export class RoomManager {
     return roomId;
   }
 
-  createRoom() {
+  createRoom(name, genre, visibility) {
     const roomId = this.generateRoomId();
-    const room = new Room(roomId);
+    const room = new Room(roomId, name, genre, visibility);
 
     this.rooms.set(roomId, room);
 
@@ -29,6 +29,30 @@ export class RoomManager {
 
   getRoom(roomId) {
     return this.rooms.get(roomId);
+  }
+
+  getActiveRooms() {
+    const activeRooms = [];
+    for (const room of this.rooms.values()) {
+        let hostName = "Unknown";
+        for (const p of room.participants.values()) {
+          if (p.role === "host") {
+            hostName = p.username;
+            break;
+          }
+        }
+        
+        activeRooms.push({
+          discoverId: room.discoverId,
+          roomId: room.visibility === "public" ? room.roomId : null,
+          roomName: room.name,
+          genre: room.genre,
+          visibility: room.visibility,
+          watching: room.participants.size,
+          host: hostName
+        });
+    }
+    return activeRooms;
   }
 
   deleteRoom(roomId) {

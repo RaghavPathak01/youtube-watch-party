@@ -1,13 +1,52 @@
 import { canControlPlayback, canAssignModerator , canRemoveParticipant ,  canApproveRequest } from "./permissions.js";
 
+const isRateLimited = (socket, eventName, limit, windowMs) => {
+  if (!socket.rateLimits) {
+    socket.rateLimits = {};
+  }
+  
+  if (!socket.rateLimits[eventName]) {
+    socket.rateLimits[eventName] = [];
+  }
+  
+  const now = Date.now();
+  const timestamps = socket.rateLimits[eventName];
+  
+  while (timestamps.length > 0 && timestamps[0] <= now - windowMs) {
+    timestamps.shift();
+  }
+  
+  if (timestamps.length >= limit) {
+    return true;
+  }
+  
+  timestamps.push(now);
+  return false;
+};
+
 export function setupSocketHandlers(io, socket, roomManager) {
 
+  const broadcastActiveRooms = () => {
+    io.emit("active_rooms_updated", roomManager.getActiveRooms());
+  };
+
+  socket.on("get_active_rooms", () => {
+    socket.emit("active_rooms_updated", roomManager.getActiveRooms());
+  });
+
   // Create a new room
-  socket.on("create_room", ({ userId, username } = {}) => {
-  const cleanUserId = String(userId || "").trim();
-  const cleanUsername = String(username || "")
-    .trim()
-    .slice(0, 30);
+  socket.on("create_room", ({ roomName, genre, visibility } = {}) => {
+  if (isRateLimited(socket, "create_room", 5, 10000)) {
+    socket.emit("error_message", { message: "Too many requests. Please slow down." });
+    return;
+  }
+  const cleanUserId = String(socket.user.userId);
+  const cleanUsername = String(socket.user.name).slice(0, 30);
+  let cleanRoomName = String(roomName || "").trim();
+  cleanRoomName = cleanRoomName ? cleanRoomName.slice(0, 50) : `${cleanUsername}'s Room`;
+  const ALLOWED_GENRES = ["Movies", "Gaming", "Music", "Education", "Sports"];
+  const cleanGenre = ALLOWED_GENRES.includes(genre) ? genre : "Movies";
+  const cleanVisibility = visibility === "public" ? "public" : "private";
 
   if (!cleanUserId || !cleanUsername) {
     socket.emit("error_message", {
@@ -25,7 +64,7 @@ export function setupSocketHandlers(io, socket, roomManager) {
     return;
   }
 
-  const room = roomManager.createRoom();
+  const room = roomManager.createRoom(cleanRoomName, cleanGenre, cleanVisibility);
 
   const participant = roomManager.addParticipant(
     room.roomId,
@@ -42,11 +81,15 @@ export function setupSocketHandlers(io, socket, roomManager) {
   });
 
   socket.emit("sync_state", {
+    roomName: room.name,
+    genre: room.genre,
+    visibility: room.visibility,
     videoId: room.videoId,
     playState: room.playState,
     currentTime: room.getCurrentTime(),
     serverTime: Date.now(),
     chatHistory: room.chatHistory,
+    queue: room.queue,
   });
 
   io.to(room.roomId).emit("participants_updated", {
@@ -56,20 +99,25 @@ export function setupSocketHandlers(io, socket, roomManager) {
   console.log(
     `${cleanUsername} created room ${room.roomId}`
   );
+  
+  broadcastActiveRooms();
 });
 
 
   // Join an existing room
-  socket.on("join_room", ({ roomId, userId, username } = {}) => {
+  socket.on("join_room", ({ roomId } = {}) => {
+    if (isRateLimited(socket, "join_room", 10, 10000)) {
+      socket.emit("error_message", { message: "Too many requests. Please slow down." });
+      return;
+    }
 
     const cleanRoomId = String(roomId || "")
       .trim()
-      .toUpperCase();
+      .toUpperCase()
+      .slice(0, 20);
 
-    const cleanUserId = String(userId || "").trim();
-    const cleanUsername = String(username || "")
-      .trim()
-      .slice(0, 30);
+    const cleanUserId = String(socket.user.userId);
+    const cleanUsername = String(socket.user.name).slice(0, 30);
 
     if (!cleanRoomId || !cleanUserId || !cleanUsername) {
       socket.emit("error_message", {
@@ -91,11 +139,15 @@ export function setupSocketHandlers(io, socket, roomManager) {
         });
 
         socket.emit("sync_state", {
+          roomName: currentRoom.name,
+          genre: currentRoom.genre,
+          visibility: currentRoom.visibility,
           videoId: currentRoom.videoId,
           playState: currentRoom.playState,
           currentTime: currentRoom.getCurrentTime(),
           serverTime: Date.now(),
           chatHistory: currentRoom.chatHistory,
+          queue: currentRoom.queue,
         });
 
         socket.emit("participants_updated", {
@@ -142,6 +194,14 @@ export function setupSocketHandlers(io, socket, roomManager) {
         cleanRoomId
       );
 
+      if (room.pendingRequests) {
+        room.pendingRequests.forEach((req) => {
+          if (req.userId === cleanUserId) {
+            req.socketId = socket.id;
+          }
+        });
+      }
+
       socket.join(cleanRoomId);
 
       socket.emit("room_joined", {
@@ -150,16 +210,31 @@ export function setupSocketHandlers(io, socket, roomManager) {
       });
 
       socket.emit("sync_state", {
+        roomName: room.name,
+        genre: room.genre,
+        visibility: room.visibility,
         videoId: room.videoId,
         playState: room.playState,
         currentTime: room.getCurrentTime(),
         serverTime: Date.now(),
         chatHistory: room.chatHistory,
+        queue: room.queue,
       });
 
       io.to(cleanRoomId).emit("participants_updated", {
         participants: room.getAllParticipants(),
       });
+
+      const systemMsg = {
+        id: Math.random().toString(36).substr(2, 9),
+        userId: "system",
+        username: "System",
+        message: `${reconnectingParticipant.username} joined`,
+        timestamp: Date.now()
+      };
+      room.chatHistory.push(systemMsg);
+      if (room.chatHistory.length > 100) room.chatHistory.shift();
+      io.to(cleanRoomId).emit("new_message", systemMsg);
 
       console.log(
         `${cleanUsername} reconnected to ${cleanRoomId} as ${reconnectingParticipant.role}`
@@ -185,10 +260,14 @@ export function setupSocketHandlers(io, socket, roomManager) {
 
     // Sync current playback state
     socket.emit("sync_state", {
+      roomName: room.name,
+      genre: room.genre,
+      visibility: room.visibility,
       videoId: room.videoId,
       playState: room.playState,
       currentTime: room.getCurrentTime(),
       serverTime: Date.now(),
+      queue: room.queue,
     });
 
     // Update everyone in the room
@@ -199,6 +278,58 @@ export function setupSocketHandlers(io, socket, roomManager) {
     console.log(
       `${cleanUsername} joined ${cleanRoomId} as ${participant.role}`
     );
+    
+    broadcastActiveRooms();
+  });
+
+  // Update room name
+  socket.on("update_room_name", ({ roomId, roomName }) => {
+    const cleanRoomId = String(roomId || "").trim().toUpperCase();
+    const room = roomManager.getRoom(cleanRoomId);
+    if (!room) return;
+
+    const participant = room.getParticipant(socket.id);
+    if (!participant || participant.role !== "host") return;
+
+    let cleanName = String(roomName || "").trim();
+    if (!cleanName) return;
+    cleanName = cleanName.slice(0, 50);
+
+    room.name = cleanName;
+    io.to(cleanRoomId).emit("room_name_updated", cleanName);
+    broadcastActiveRooms();
+  });
+
+  // Update genre
+  socket.on("update_genre", ({ roomId, genre }) => {
+    const cleanRoomId = String(roomId || "").trim().toUpperCase();
+    const room = roomManager.getRoom(cleanRoomId);
+    if (!room) return;
+
+    const participant = room.getParticipant(socket.id);
+    if (!participant || participant.role !== "host") return;
+
+    const ALLOWED_GENRES = ["Movies", "Gaming", "Music", "Education", "Sports"];
+    if (!ALLOWED_GENRES.includes(genre)) return;
+
+    room.genre = genre;
+    io.to(cleanRoomId).emit("genre_updated", genre);
+    broadcastActiveRooms();
+  });
+
+  // Update visibility
+  socket.on("update_visibility", ({ roomId, visibility }) => {
+    const cleanRoomId = String(roomId || "").trim().toUpperCase();
+    const room = roomManager.getRoom(cleanRoomId);
+    if (!room) return;
+
+    const participant = room.getParticipant(socket.id);
+    if (!participant || participant.role !== "host") return;
+
+    const cleanVisibility = visibility === "public" ? "public" : "private";
+    room.visibility = cleanVisibility;
+    io.to(cleanRoomId).emit("visibility_updated", cleanVisibility);
+    broadcastActiveRooms();
   });
 
 
@@ -211,6 +342,12 @@ export function setupSocketHandlers(io, socket, roomManager) {
   }
 
   const { room, participant } = result;
+
+  if (room.pendingRequests) {
+    room.pendingRequests = room.pendingRequests.filter(
+      (req) => req.userId !== participant.userId
+    );
+  }
 
   socket.leave(room.roomId);
 
@@ -237,6 +374,7 @@ export function setupSocketHandlers(io, socket, roomManager) {
     console.log(`Room ${room.roomId} deleted (empty)`);
   }
 
+  broadcastActiveRooms();
   return result;
 };
 
@@ -276,6 +414,12 @@ export function setupSocketHandlers(io, socket, roomManager) {
       room,
       participant,
       (room, disconnectedParticipant, newHost) => {
+        if (room.pendingRequests) {
+          room.pendingRequests = room.pendingRequests.filter(
+            (req) => req.userId !== disconnectedParticipant.userId
+          );
+        }
+
         if (room.isEmpty()) {
             roomManager.deleteRoom(room.roomId);
             console.log(`Room ${room.roomId} deleted (empty after disconnect timeout)`);
@@ -301,6 +445,8 @@ export function setupSocketHandlers(io, socket, roomManager) {
             `${newHost.username} is now the Host of ${room.roomId}`
           );
         }
+        
+        broadcastActiveRooms();
       }
     );
   });
@@ -322,6 +468,10 @@ export function setupSocketHandlers(io, socket, roomManager) {
 
   // Play Event
   socket.on("play", (data = {}) => {
+    if (isRateLimited(socket, "play", 10, 1000)) {
+      socket.emit("error_message", { message: "Too many requests. Please slow down." });
+      return;
+    }
     const room = roomManager.getRoomBySocket(socket.id);
 
     if (!room) {
@@ -342,7 +492,14 @@ export function setupSocketHandlers(io, socket, roomManager) {
         return;
     }
 
-    playVideo(room, data.currentTime);
+    let timeToPlay = data?.currentTime;
+    if (timeToPlay !== undefined) {
+      timeToPlay = Number(timeToPlay);
+      if (!Number.isFinite(timeToPlay) || timeToPlay < 0) {
+        timeToPlay = undefined;
+      }
+    }
+    playVideo(room, timeToPlay);
   });
 
 
@@ -363,6 +520,10 @@ const pauseVideo = (room, providedTime) => {
 
   // Pause Event
   socket.on("pause", (data = {}) => {
+    if (isRateLimited(socket, "pause", 10, 1000)) {
+      socket.emit("error_message", { message: "Too many requests. Please slow down." });
+      return;
+    }
     const room = roomManager.getRoomBySocket(socket.id);
 
     if (!room) {
@@ -383,7 +544,14 @@ const pauseVideo = (room, providedTime) => {
         return;
     }
 
-    pauseVideo(room, data.currentTime);
+    let timeToPause = data?.currentTime;
+    if (timeToPause !== undefined) {
+      timeToPause = Number(timeToPause);
+      if (!Number.isFinite(timeToPause) || timeToPause < 0) {
+        timeToPause = undefined;
+      }
+    }
+    pauseVideo(room, timeToPause);
   });
 
   // seek event
@@ -399,6 +567,10 @@ const pauseVideo = (room, providedTime) => {
 };
 
   socket.on("seek", ({ currentTime } = {}) => {
+    if (isRateLimited(socket, "seek", 10, 1000)) {
+      socket.emit("error_message", { message: "Too many requests. Please slow down." });
+      return;
+    }
     const room = roomManager.getRoomBySocket(socket.id);
 
     if (!room) {
@@ -434,10 +606,10 @@ const pauseVideo = (room, providedTime) => {
 
   // change video event
 
-  const changeVideo = (room, videoId) => {
+  const changeVideo = (room, videoId, autoplay = false) => {
   room.videoId = videoId;
   room.currentTime = 0;
-  room.playState = "paused";
+  room.playState = autoplay ? "playing" : "paused";
   room.lastUpdatedAt = Date.now();
 
   io.to(room.roomId).emit("change_video", {
@@ -449,6 +621,10 @@ const pauseVideo = (room, providedTime) => {
 };
 
   socket.on("change_video", ({ videoId } = {}) => {
+  if (isRateLimited(socket, "change_video", 3, 1000)) {
+    socket.emit("error_message", { message: "Too many requests. Please slow down." });
+    return;
+  }
   const room = roomManager.getRoomBySocket(socket.id);
 
   if (!room) {
@@ -485,6 +661,10 @@ const pauseVideo = (room, providedTime) => {
 // request action 
 
 socket.on("request_action", ({ action, data } = {}) => {
+  if (isRateLimited(socket, "request_action", 5, 1000)) {
+    socket.emit("error_message", { message: "Too many requests. Please slow down." });
+    return;
+  }
   const room = roomManager.getRoomBySocket(socket.id);
 
   if (!room) {
@@ -543,12 +723,30 @@ socket.on("request_action", ({ action, data } = {}) => {
     return;
   }
 
+  let cleanData = {};
+  if (action === "seek") {
+    const time = Number(data?.currentTime);
+    if (!Number.isFinite(time) || time < 0) {
+      socket.emit("error_message", { message: "Invalid seek time" });
+      return;
+    }
+    cleanData = { currentTime: time };
+  } else if (action === "change_video") {
+    const vid = String(data?.videoId || "").trim();
+    if (!/^[a-zA-Z0-9_-]{11}$/.test(vid)) {
+      socket.emit("error_message", { message: "Invalid YouTube video ID" });
+      return;
+    }
+    cleanData = { videoId: vid };
+  }
+
   const request = {
     requestId: Date.now().toString(),
     socketId: socket.id,
+    userId: participant.userId,
     username: participant.username,
     action,
-    data: data || {},
+    data: cleanData,
   };
 
   room.pendingRequests.push(request);
@@ -567,6 +765,11 @@ socket.on("request_action", ({ action, data } = {}) => {
 // Request Approval
 
 socket.on("approve_request", ({ requestId } = {}) => {
+  if (isRateLimited(socket, "approve_request", 10, 1000)) {
+    socket.emit("error_message", { message: "Too many requests. Please slow down." });
+    return;
+  }
+  const cleanRequestId = String(requestId || "");
   const room = roomManager.getRoomBySocket(socket.id);
 
   if (!room) {
@@ -588,7 +791,7 @@ socket.on("approve_request", ({ requestId } = {}) => {
   }
 
   const request = room.pendingRequests?.find(
-    (item) => item.requestId === requestId
+    (item) => item.requestId === cleanRequestId
   );
 
   // Check request before using request.action
@@ -631,7 +834,7 @@ socket.on("approve_request", ({ requestId } = {}) => {
 
   // Remove processed request
   room.pendingRequests = room.pendingRequests.filter(
-    (item) => item.requestId !== requestId
+    (item) => item.requestId !== cleanRequestId
   );
 
   // Tell requester that request was approved
@@ -650,6 +853,11 @@ socket.on("approve_request", ({ requestId } = {}) => {
 // Reject
 
 socket.on("reject_request", ({ requestId } = {}) => {
+  if (isRateLimited(socket, "reject_request", 10, 1000)) {
+    socket.emit("error_message", { message: "Too many requests. Please slow down." });
+    return;
+  }
+  const cleanRequestId = String(requestId || "");
   const room = roomManager.getRoomBySocket(socket.id);
 
   if (!room) {
@@ -671,7 +879,7 @@ socket.on("reject_request", ({ requestId } = {}) => {
   }
 
   const request = room.pendingRequests?.find(
-    (item) => item.requestId === requestId
+    (item) => item.requestId === cleanRequestId
   );
 
   if (!request) {
@@ -683,7 +891,7 @@ socket.on("reject_request", ({ requestId } = {}) => {
   }
 
   room.pendingRequests = room.pendingRequests.filter(
-    (item) => item.requestId !== requestId
+    (item) => item.requestId !== cleanRequestId
   );
 
   io.to(request.socketId).emit("request_rejected", {
@@ -699,6 +907,11 @@ socket.on("reject_request", ({ requestId } = {}) => {
 
  // assign moderator
  socket.on("assign_moderator", ({ targetSocketId } = {}) => {
+  if (isRateLimited(socket, "assign_moderator", 5, 1000)) {
+    socket.emit("error_message", { message: "Too many requests. Please slow down." });
+    return;
+  }
+  const cleanTargetSocketId = String(targetSocketId || "");
   const room = roomManager.getRoomBySocket(socket.id);
 
   if (!room) {
@@ -719,7 +932,7 @@ socket.on("reject_request", ({ requestId } = {}) => {
     return;
   }
 
-  const target = room.getParticipant(targetSocketId);
+  const target = room.getParticipant(cleanTargetSocketId);
 
   if (!target) {
     socket.emit("error_message", {
@@ -750,6 +963,11 @@ socket.on("reject_request", ({ requestId } = {}) => {
 
 // Remove Participant
 socket.on("remove_participant", ({ targetSocketId } = {}) => {
+  if (isRateLimited(socket, "remove_participant", 5, 1000)) {
+    socket.emit("error_message", { message: "Too many requests. Please slow down." });
+    return;
+  }
+  const cleanTargetSocketId = String(targetSocketId || "");
   const room = roomManager.getRoomBySocket(socket.id);
 
   if (!room) {
@@ -770,7 +988,7 @@ socket.on("remove_participant", ({ targetSocketId } = {}) => {
     return;
   }
 
-  if (targetSocketId === socket.id) {
+  if (cleanTargetSocketId === socket.id) {
     socket.emit("error_message", {
       message: "You cannot remove yourself",
     });
@@ -778,7 +996,7 @@ socket.on("remove_participant", ({ targetSocketId } = {}) => {
     return;
   }
 
-  const target = room.getParticipant(targetSocketId);
+  const target = room.getParticipant(cleanTargetSocketId);
 
   if (!target) {
     socket.emit("error_message", {
@@ -788,7 +1006,7 @@ socket.on("remove_participant", ({ targetSocketId } = {}) => {
     return;
   }
 
-  const result = roomManager.removeParticipant(targetSocketId);
+  const result = roomManager.removeParticipant(cleanTargetSocketId);
 
   if (!result) {
     socket.emit("error_message", {
@@ -798,7 +1016,7 @@ socket.on("remove_participant", ({ targetSocketId } = {}) => {
     return;
   }
 
-  const targetSocket = io.sockets.sockets.get(targetSocketId);
+  const targetSocket = io.sockets.sockets.get(cleanTargetSocketId);
 
   if (targetSocket) {
     targetSocket.leave(room.roomId);
@@ -822,6 +1040,10 @@ socket.on("remove_participant", ({ targetSocketId } = {}) => {
 
   // Chat message
   socket.on("send_chat_message", ({ message } = {}) => {
+    if (isRateLimited(socket, "send_chat_message", 5, 1000)) {
+      socket.emit("error_message", { message: "Too many requests. Please slow down." });
+      return;
+    }
     const roomId = roomManager.getRoomBySocket(socket.id)?.roomId;
     if (!roomId) return;
 
@@ -848,5 +1070,129 @@ socket.on("remove_participant", ({ targetSocketId } = {}) => {
     room.addChatMessage(chatMsg);
 
     io.to(roomId).emit("new_chat_message", chatMsg);
+  });
+
+  // Queue Events
+  socket.on("queue_add", ({ videoId, title } = {}) => {
+    if (isRateLimited(socket, "queue_add", 5, 1000)) {
+      socket.emit("error_message", { message: "Too many requests. Please slow down." });
+      return;
+    }
+    const roomId = roomManager.getRoomBySocket(socket.id)?.roomId;
+    if (!roomId) return;
+    const room = roomManager.getRoom(roomId);
+    if (!room) return;
+    const participant = room.getParticipant(socket.id);
+    if (!participant) return;
+
+    const cleanVideoId = String(videoId || "").trim();
+    if (!/^[a-zA-Z0-9_-]{11}$/.test(cleanVideoId)) {
+      socket.emit("error_message", { message: "Invalid YouTube video ID" });
+      return;
+    }
+
+    if (room.queue.length >= 50) {
+      socket.emit("error_message", { message: "Queue is full (maximum 50 items)" });
+      return;
+    }
+
+    let cleanTitle = String(title || "").trim().slice(0, 100);
+    if (!cleanTitle) cleanTitle = "YouTube Video";
+
+    const queueItem = {
+      id: crypto.randomUUID(),
+      videoId: cleanVideoId,
+      title: cleanTitle,
+      thumbnail: `https://img.youtube.com/vi/${cleanVideoId}/mqdefault.jpg`,
+      addedBy: {
+        userId: participant.userId,
+        username: participant.username
+      }
+    };
+
+    room.queue.push(queueItem);
+    io.to(roomId).emit("queue_updated", room.queue);
+  });
+
+  socket.on("queue_remove", ({ id } = {}) => {
+    if (isRateLimited(socket, "queue_remove", 10, 1000)) {
+      socket.emit("error_message", { message: "Too many requests." });
+      return;
+    }
+    const roomId = roomManager.getRoomBySocket(socket.id)?.roomId;
+    if (!roomId) return;
+    const room = roomManager.getRoom(roomId);
+    if (!room) return;
+    const participant = room.getParticipant(socket.id);
+    if (!participant) return;
+
+    if (participant.role !== "host" && participant.role !== "moderator") {
+      socket.emit("error_message", { message: "Only Host or Moderator can remove from queue" });
+      return;
+    }
+
+    const cleanId = String(id || "");
+    const initialLen = room.queue.length;
+    room.queue = room.queue.filter(item => item.id !== cleanId);
+
+    if (room.queue.length !== initialLen) {
+      io.to(roomId).emit("queue_updated", room.queue);
+    }
+  });
+
+  socket.on("queue_play_now", ({ id } = {}) => {
+    if (isRateLimited(socket, "queue_play_now", 3, 1000)) {
+      socket.emit("error_message", { message: "Too many requests." });
+      return;
+    }
+    const roomId = roomManager.getRoomBySocket(socket.id)?.roomId;
+    if (!roomId) return;
+    const room = roomManager.getRoom(roomId);
+    if (!room) return;
+    const participant = room.getParticipant(socket.id);
+    if (!participant) return;
+
+    if (participant.role !== "host" && participant.role !== "moderator") {
+      socket.emit("error_message", { message: "Only Host or Moderator can play from queue" });
+      return;
+    }
+
+    const cleanId = String(id || "");
+    const itemIndex = room.queue.findIndex(item => item.id === cleanId);
+    
+    if (itemIndex === -1) {
+      socket.emit("error_message", { message: "Item not found in queue" });
+      return;
+    }
+
+    const item = room.queue.splice(itemIndex, 1)[0];
+    
+    // Play it using existing mechanism. Manual "Play Now" leaves it PAUSED.
+    changeVideo(room, item.videoId, false);
+    io.to(roomId).emit("queue_updated", room.queue);
+  });
+
+  socket.on("video_ended", ({ videoId } = {}) => {
+    if (isRateLimited(socket, "video_ended", 5, 2000)) return;
+    
+    const roomId = roomManager.getRoomBySocket(socket.id)?.roomId;
+    if (!roomId) return;
+    const room = roomManager.getRoom(roomId);
+    if (!room) return;
+    
+    const cleanVideoId = String(videoId || "");
+    
+    // Server is authoritative. If the video that ended is STILL the room's video
+    // AND there's something in the queue, we advance. 
+    // This prevents race conditions where multiple clients send 'video_ended'.
+    if (room.videoId === cleanVideoId && room.queue.length > 0) {
+      // Debounce: prevent triggering multiple times within a short window
+      if (Date.now() - room.lastUpdatedAt < 2000) return;
+      
+      const item = room.queue.shift(); // Remove next item
+      // Automatic next video is AUTOPLAYED
+      changeVideo(room, item.videoId, true);
+      io.to(roomId).emit("queue_updated", room.queue);
+    }
   });
 }

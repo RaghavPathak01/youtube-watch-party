@@ -1,27 +1,20 @@
 import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import socket from "../services/socket";
 import { Header } from "../components/Header";
+import { useAuth } from "../context/AuthContext";
+import { useModal } from "../context/ModalContext";
 
 
-const getUserId = () => {
-  let userId = localStorage.getItem("watchPartyUserId");
-
-  if (!userId) {
-    userId = crypto.randomUUID();
-
-    localStorage.setItem(
-      "watchPartyUserId",
-      userId
-    );
-  }
-
-  return userId;
-};
 
 function Home() {
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");
+  const { showAlert } = useModal();
+  const { user, setIsAuthModalOpen } = useAuth();
+  
+  const [roomName, setRoomName] = useState("");
+  const [genre, setGenre] = useState("Movies");
+  const [visibility, setVisibility] = useState("private");
   const [roomId, setRoomId] = useState("");
   const roomIdInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,47 +25,33 @@ function Home() {
 
 
   const createRoom = () => {
-      const cleanUsername = username.trim();
-
-      if (!cleanUsername) {
-          alert("Please enter your name");
+      if (!user) {
+          setIsAuthModalOpen(true);
           return;
       }
 
-      localStorage.setItem(
-          "watchPartyUsername",
-          cleanUsername
-      );
-
       socket.emit("create_room", {
-          userId: getUserId(),
-          username: cleanUsername,
+          roomName: roomName.trim(),
+          genre,
+          visibility
       });
   };
 
   const joinRoom = () => {
-    const cleanUsername = username.trim();
+    if (!user) {
+        setIsAuthModalOpen(true);
+        return;
+    }
+      
     const cleanRoomId = roomId.trim();
 
-    if (!cleanUsername) {
-      alert("Please enter your name");
-      return;
-    }
-
     if (!cleanRoomId) {
-      alert("Please enter room ID");
+      showAlert("Please enter room ID");
       return;
     }
-
-    localStorage.setItem(
-      "watchPartyUsername",
-      cleanUsername
-    );
 
     socket.emit("join_room", {
       roomId: cleanRoomId,
-      userId: getUserId(),
-      username: cleanUsername,
     });
   };
 
@@ -118,14 +97,70 @@ function Home() {
               YouTube together in perfect synchronization.
             </p>
 
+
             <div className="hero-name-input">
-                <label className="input-label">Your Name</label>
+                <label className="input-label">Room Name</label>
                 <input
                     type="text"
-                    placeholder="Enter your name"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Friday Movie Night"
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
                 />
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+                <div className="hero-name-input" style={{ flex: 1, marginBottom: 0 }}>
+                    <label className="input-label">Genre</label>
+                    <select
+                        value={genre}
+                        onChange={(e) => setGenre(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '14px 16px',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '12px',
+                            color: 'white',
+                            fontSize: '15px',
+                            outline: 'none',
+                            cursor: 'pointer',
+                            WebkitAppearance: 'none',
+                            MozAppearance: 'none',
+                            appearance: 'none'
+                        }}
+                    >
+                        <option value="Movies" style={{ background: '#17181b' }}>Movies</option>
+                        <option value="Gaming" style={{ background: '#17181b' }}>Gaming</option>
+                        <option value="Music" style={{ background: '#17181b' }}>Music</option>
+                        <option value="Education" style={{ background: '#17181b' }}>Education</option>
+                        <option value="Sports" style={{ background: '#17181b' }}>Sports</option>
+                    </select>
+                </div>
+
+                <div className="hero-name-input" style={{ flex: 1, marginBottom: 0 }}>
+                    <label className="input-label">Visibility</label>
+                    <select
+                        value={visibility}
+                        onChange={(e) => setVisibility(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '14px 16px',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '12px',
+                            color: 'white',
+                            fontSize: '15px',
+                            outline: 'none',
+                            cursor: 'pointer',
+                            WebkitAppearance: 'none',
+                            MozAppearance: 'none',
+                            appearance: 'none'
+                        }}
+                    >
+                        <option value="private" style={{ background: '#17181b' }}>Private</option>
+                        <option value="public" style={{ background: '#17181b' }}>Public</option>
+                    </select>
+                </div>
             </div>
 
             <div className="hero-buttons">
@@ -235,6 +270,7 @@ function Home() {
 
           <div className="join-form">
 
+
             <input
               type="text"
               ref={roomIdInputRef}
@@ -253,7 +289,7 @@ function Home() {
 
 
         {/* How it works */}
-        <section className="how-section">
+        <section id="how-it-works" className="how-section">
 
           <div className="section-heading">
             <span className="section-label">HOW IT WORKS</span>
@@ -297,7 +333,130 @@ function Home() {
 
         </section>
 
+        {/* About Section */}
+        <section id="about" className="about-section">
+          
+          <div className="section-heading">
+            <span className="section-label">ABOUT WATCHTOGETHER</span>
+            <h2>
+              Watch together. 
+              <span> Built for real-time connection.</span>
+            </h2>
+            <p className="about-intro">
+              WatchTogether is a real-time watch party application that lets friends create private rooms, watch YouTube together and stay synchronized through real-time communication.
+            </p>
+          </div>
+
+          <div className="features-grid">
+            <div className="feature-card">
+              <h3>Real-time Sync</h3>
+              <p>Keep playback synchronized across everyone in the room.</p>
+            </div>
+            <div className="feature-card">
+              <h3>Synced Playback</h3>
+              <p>Play, pause and seek actions are reflected across participants.</p>
+            </div>
+            <div className="feature-card">
+              <h3>Role Control</h3>
+              <p>Hosts and moderators control the room while participants can request actions.</p>
+            </div>
+            <div className="feature-card">
+              <h3>Live Chat</h3>
+              <p>Participants can communicate with everyone inside the watch party.</p>
+            </div>
+          </div>
+
+          <div className="flow-container">
+            <h3>How the system works</h3>
+            <div className="flow-diagram">
+              <div className="flow-node">HOST</div>
+              <div className="flow-arrow">↓</div>
+              <div className="flow-node accent">SOCKET.IO</div>
+              <div className="flow-arrow">↓</div>
+              <div className="flow-node">SERVER</div>
+              <div className="flow-arrow">↓</div>
+              <div className="flow-node">PARTICIPANTS</div>
+            </div>
+            <p className="flow-desc">
+              When the host performs a playback action, Socket.IO sends the event to the server. The server validates the action and broadcasts the update to the participants.
+            </p>
+          </div>
+
+          <div className="tech-section">
+            <h3>Technology</h3>
+            <div className="tech-tags">
+              <span>React + TypeScript</span>
+              <span>Node.js + Express</span>
+              <span>Socket.IO</span>
+              <span>YouTube IFrame Player API</span>
+              <span>Vite</span>
+              <span>CSS</span>
+            </div>
+          </div>
+
+          <div className="why-built">
+            <h3>Why I Built It</h3>
+            <p>
+              I built WatchTogether to understand how real-time applications work beyond normal request-response communication. The project helped me work with WebSockets, synchronized media playback, role-based permissions and frontend-backend communication.
+            </p>
+          </div>
+
+        </section>
+
       </main>
+
+      {/* Footer / Help Section */}
+      <footer id="help" className="footer-section">
+        <div className="footer-content">
+          
+          <div className="footer-brand">
+            <div className="brand">
+              <div className="brand-icon">W</div>
+              <span>WatchTogether</span>
+            </div>
+            <h3>Watch together.<br/>Stay in sync.</h3>
+            <p>Watch YouTube together with your friends in real-time, with synchronized playback, role control and live chat.</p>
+          </div>
+
+          <div className="footer-links">
+            <div className="link-column">
+              <h4>PRODUCT</h4>
+              <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo(0,0); }}>Home</a>
+              <a href="#about" onClick={(e) => { e.preventDefault(); document.getElementById('about')?.scrollIntoView(); }}>About</a>
+              <Link to="/discover">Discover</Link>
+            </div>
+            
+            <div className="link-column">
+              <h4>RESOURCES</h4>
+              <a href="#how-it-works" onClick={(e) => { e.preventDefault(); document.getElementById('how-it-works')?.scrollIntoView(); }}>How it works</a>
+              <a href="#about" onClick={(e) => { e.preventDefault(); document.getElementById('about')?.scrollIntoView(); }}>Technology</a>
+              <a href="#">Documentation</a>
+              <a href="#">FAQ</a>
+            </div>
+
+            <div className="link-column">
+              <h4>SUPPORT</h4>
+              <a href="#help" onClick={(e) => { e.preventDefault(); document.getElementById('help')?.scrollIntoView(); }}>Help</a>
+              <a href="mailto:support@watchtogether.com">Contact</a>
+              <a href="#">Feedback</a>
+            </div>
+          </div>
+
+          <div className="footer-help">
+            <h4>Need help?</h4>
+            <p>Have a question about WatchTogether?</p>
+            <div className="help-buttons">
+              <button className="primary-btn" onClick={() => showAlert("Ask a Question form coming soon!")}>Ask a Question</button>
+              <a href="mailto:support@watchtogether.com" className="secondary-btn">Contact by Email</a>
+            </div>
+          </div>
+        </div>
+
+        <div className="footer-bottom">
+          <p>© 2026 WatchTogether</p>
+          <p>Built for real-time connection.</p>
+        </div>
+      </footer>
 
     </div>
   );

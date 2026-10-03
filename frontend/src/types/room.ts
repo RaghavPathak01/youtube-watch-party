@@ -12,3 +12,14 @@ export interface RoomState {
   currentTime: number;
   serverTime: number;
 }
+
+export interface QueueItem {
+  id: string;
+  videoId: string;
+  title: string;
+  thumbnail: string;
+  addedBy: {
+    userId: string;
+    username: string;
+  };
+}

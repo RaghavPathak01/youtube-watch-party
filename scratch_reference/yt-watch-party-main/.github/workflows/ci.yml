@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: watchparty
+          POSTGRES_PASSWORD: watchparty
+          POSTGRES_DB: watchparty
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U watchparty"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://watchparty:watchparty@localhost:5433/watchparty_test
+      TEST_REDIS_URL: redis://localhost:6380
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      # Type-aware lint builds a TypeScript program per workspace project (~2.9 GB peak). Private-repo
+      # runners have 7 GB, so Node's default heap (~2 GB there) is too small.
+      - run: pnpm lint
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build

@@ -1,8 +1,13 @@
+import { randomUUID } from "crypto";
 import { Participant, ROLES } from "./Participant.js";
 
 export class Room {
-  constructor(roomId) {
+  constructor(roomId, name = "Anonymous", genre = "Movies", visibility = "private") {
     this.roomId = roomId;
+    this.discoverId = randomUUID();
+    this.name = name;
+    this.genre = genre;
+    this.visibility = visibility;
     this.participants = new Map();
     this.hostUserId = null;
     this.pendingDisconnects = new Map();
@@ -12,6 +17,7 @@ export class Room {
     this.currentTime = 0;
     this.lastUpdatedAt = Date.now();
     this.chatHistory = [];
+    this.queue = [];
   }
 
   addParticipant(socketId, userId, username) {

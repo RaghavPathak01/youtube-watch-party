@@ -15,10 +15,12 @@ declare namespace YT {
                         data: number;
                     }) => void;
                 };
+                playerVars?: Record<string, any>;
             }
         );
 
         loadVideoById(videoId: string, startSeconds?: number): void;
+        cueVideoById(videoId: string, startSeconds?: number): void;
         playVideo(): void;
         pauseVideo(): void;
 

@@ -1,740 +1,224 @@
-import { useEffect,useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-
 import socket from "../services/socket";
+import { useAuth } from "../context/AuthContext";
+import { useModal } from "../context/ModalContext";
+import type { Participant, QueueItem } from "../types/room";
 
-import type { Participant } from "../types/room";
+import { RoomHeader } from "../components/room/RoomHeader";
+import type { YouTubePlayerHandle } from "../components/room/YouTubePlayer";
+import { YouTubePlayer } from "../components/room/YouTubePlayer";
+import { VideoControls } from "../components/room/VideoControls";
+import { VideoInput } from "../components/room/VideoInput";
+import { ReactionBar } from "../components/room/ReactionBar";
+import { FloatingReactions, type FloatingReaction } from "../components/room/FloatingReactions";
+import { RoomPanel } from "../components/room/RoomPanel";
+import type { ChatMessage } from "../components/room/ChatPanel";
 
-interface ChatMessage {
-    id: string;
-    userId: string;
-    username: string;
-    message: string;
-    timestamp: number;
-}
-
-const getUserId = () => {
-    let userId = localStorage.getItem("watchPartyUserId");
-
-    if (!userId) {
-        userId = crypto.randomUUID();
-
-        localStorage.setItem(
-            "watchPartyUserId",
-            userId
-        );
-    }
-
-    return userId;
-};
-
-const AVATAR_COLORS = [
-    "#a78bfa", // Purple
-    "#22d3ee", // Cyan
-    "#fb923c", // Orange
-    "#4ade80", // Green
-    "#f472b6", // Pink
-];
-
-const getColorForUsername = (username: string) => {
-    let hash = 0;
-    for (let i = 0; i < username.length; i++) {
-        hash = username.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const index = Math.abs(hash) % AVATAR_COLORS.length;
-    return AVATAR_COLORS[index];
-};
-
-function Room() {
-
+export default function Room() {
     const { roomId } = useParams();
-    console.log("ROOM ID:", roomId);
-    console.log(
-        "SAVED USERNAME:",
-        localStorage.getItem("watchPartyUsername")
-    );
-    console.log("SOCKET ID:", socket.id);
-    console.log("SOCKET CONNECTED:", socket.connected);
+    const { user, setIsAuthModalOpen, isLoading } = useAuth();
+    const { showAlert, showConfirm } = useModal();
     const navigate = useNavigate();
 
+    // -- Room State --
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [currentUser, setCurrentUser] = useState<Participant | null>(null);
+    const [roomName, setRoomName] = useState("Anonymous");
+    const [genre, setGenre] = useState("Movies");
+    const [visibility, setVisibility] = useState("private");
+    const [hasJoinedRoom] = useState(false);
 
-    const hostParticipant = participants.find(
-        (participant) => participant.role === "host"
-    );
-
-    const hostInitial =
-        hostParticipant?.username?.charAt(0).toUpperCase() || "?";
-    const [videoUrl, setVideoUrl] = useState("");
+    // -- Player State --
     const [videoId, setVideoId] = useState("");
-    const hasVideo = Boolean(videoId);
-
-    const [syncState, setSyncState] = useState<{
-        videoId: string;
-        playState: "playing" | "paused";
-        currentTime: number;
-        serverTime: number;
-    } | null>(null);
-
-    const syncStateRef = useRef<{
-        videoId: string;
-        playState: "playing" | "paused";
-        currentTime: number;
-        serverTime: number;
-    } | null>(null);
-
-    const [actionRequests, setActionRequests] = useState<any[]>([]);
-    const [isVideoMaximized, setIsVideoMaximized] = useState(false);
-
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
-
-    const [showQualityMenu, setShowQualityMenu] = useState(false);
-    const [isPlayerReady, setIsPlayerReady] = useState(false);
+    const [isVideoMaximized, setIsVideoMaximized] = useState(false);
     
-    useEffect(() => {
-        if (!showQualityMenu) {
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setShowQualityMenu(false);
-        }, 5000);
-
-        return () => {
-            clearTimeout(timer);
-        };
-    }, [showQualityMenu]);
-
-    const [hasJoinedRoom] = useState(false);
-
+    // -- Other State --
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-    const [newMessage, setNewMessage] = useState("");
+    const [actionRequests, setActionRequests] = useState<any[]>([]);
+    const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
+    const [queue, setQueue] = useState<QueueItem[]>([]);
 
-    const playerRef = useRef<YT.Player | null>(null);
-    const expectedRemoteState = useRef<number | null>(null);
+    const playerRef = useRef<YouTubePlayerHandle>(null);
+    const hasVideo = Boolean(videoId);
 
+    // Derived Auth/RBAC
     const isHost = currentUser?.role === "host";
     const isModerator = currentUser?.role === "moderator";
     const canControl = isHost || isModerator;
 
-    const canControlRef = useRef(canControl);
-    canControlRef.current = canControl;
 
-    const isPlayingRef = useRef(isPlaying);
-    isPlayingRef.current = isPlaying;
-
-    const makeModerator = (socketId: string) => {
-        socket.emit("assign_moderator", {
-            targetSocketId: socketId,
-        });
-    };
-
-    const removeParticipant = (socketId: string) => {
-        socket.emit("remove_participant", {
-            targetSocketId: socketId,
-        });
-    };
-
-    const leaveRoom = () => {
-        socket.emit("leave_room");
-    };
-
-    const shareRoom = async () => {
-        if (!roomId) {
-            return;
-        }
-
-        const roomLink = `${window.location.origin}/room/${roomId}`;
-
-        try {
-            await navigator.clipboard.writeText(roomLink);
-
-            alert("Room link copied!");
-        } catch {
-            alert("Could not copy room link");
-        }
-    };
-
-
-    const approveRequest = (requestId: string) => {
-        socket.emit("approve_request", {
-            requestId,
-        });
-
-        setActionRequests((prevRequests) =>
-            prevRequests.filter(
-                (request) => request.requestId !== requestId
-            )
-        );
-    };
-
-    const rejectRequest = (requestId: string) => {
-        socket.emit("reject_request", {
-            requestId,
-        });
-
-        setActionRequests((prevRequests) =>
-            prevRequests.filter(
-                (request) => request.requestId !== requestId
-            )
-        );
-    };
-
-    const formatTime = (time: number) => {
-        const minutes = Math.floor(time / 60);
-        const seconds = Math.floor(time % 60);
-
-        return `${String(minutes).padStart(2, "0")}:${String(
-            seconds
-        ).padStart(2, "0")}`;
-    };
-
-    const togglePlayback = () => {
-        if (!playerRef.current) {
-            return;
-        }
-
-        const playerState = playerRef.current.getPlayerState();
-
-        const action =
-            playerState === YT.PlayerState.PLAYING
-                ? "pause"
-                : "play";
-
-        if (canControl) {
-            socket.emit(action);
-            return;
-        }
-
-        socket.emit("request_action", {
-            action,
-        });
-    };
-
-    const seekVideo = (time: number) => {
-        if (!playerRef.current) {
-            return;
-        }
-
-        if (canControl) {
-            socket.emit("seek", {
-                currentTime: time,
-            });
-            return;
-        }
-
-        socket.emit("request_action", {
-            action: "seek",
-            data: {
-                currentTime: time,
-            },
-        });
-    };
-
-
-    const toggleFullscreen = () => {
-        setIsVideoMaximized((prev) => !prev);
-    };
-
+    // ------------------------------------------
+    // SOCKET: CONNECTION & JOINING
+    // ------------------------------------------
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "Escape" && isVideoMaximized) {
-                setIsVideoMaximized(false);
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isVideoMaximized]);
-
-    const changeQuality = (quality: string) => {
-        if (!playerRef.current) {
+        if (isLoading) return;
+        if (!user) {
+            setIsAuthModalOpen(true);
+            navigate("/discover");
             return;
         }
+        if (!roomId || hasJoinedRoom) return;
 
-        playerRef.current.setPlaybackQuality(quality);
-        setShowQualityMenu(false);
-    };
-
-    const getVideoId = (url: string) => {
-        try {
-            const urlObject = new URL(url);
-
-            if (urlObject.hostname === "youtu.be") {
-                return urlObject.pathname.slice(1);
-            }
-
-            return urlObject.searchParams.get("v");
-        } catch {
-            return null;
-        }
-    };
-
-    const loadVideo = () => {
-        const id = getVideoId(videoUrl);
-
-        if (!id) {
-            alert("Please enter a valid YouTube URL");
-            return;
-        }
-
-        if (canControl) {
-            socket.emit("change_video", {
-                videoId: id,
-            });
-
-            return;
-        }
-
-        socket.emit("request_action", {
-            action: "change_video",
-            data: {
-                videoId: id,
-            },
-        });
-    };
-
-    useEffect(() => {
-        const handleParticipantsUpdated = (data: {
-            participants: Participant[];
-        }) => {
-            setParticipants(data.participants);
-
-            const user = data.participants.find(
-                (participant) => participant.socketId === socket.id
-            );
-
-            if (user) {
-                setCurrentUser(user);
-            }
-        };
-
-        socket.on("participants_updated", handleParticipantsUpdated);
-
-        return () => {
-            socket.off("participants_updated", handleParticipantsUpdated);
-        };
-    }, []);
-
-    useEffect(() => {
-        const username = localStorage.getItem("watchPartyUsername");
-
-        if (!roomId || !username || hasJoinedRoom) {
-            return;
-        }
-
-        const joinRoom = () => {
-            socket.emit("join_room", {
-                roomId,
-                userId: getUserId(),
-                username,
-            });
-        };
-
-        if (socket.connected) {
-            joinRoom();
-        }
-        
-        // Use .on instead of .once so it auto-rejoins after sleep/disconnect!
+        const joinRoom = () => socket.emit("join_room", { roomId });
+        if (socket.connected) joinRoom();
         socket.on("connect", joinRoom);
 
         return () => {
             socket.off("connect", joinRoom);
         };
-    }, [roomId, hasJoinedRoom]);
+    }, [roomId, hasJoinedRoom, isLoading, user, navigate, setIsAuthModalOpen]);
 
+    // ------------------------------------------
+    // SOCKET: ERROR HANDLING & ROOM EVENTS
+    // ------------------------------------------
     useEffect(() => {
-        const handleError = (data: { message: string }) => {
-            alert(data.message);
+        const handleError = async (data: { message: string }) => {
+            await showAlert(data.message);
             if (data.message === "Room not found" || data.message === "You are not in a room") {
-                navigate("/");
+                navigate("/discover");
             }
         };
+        const handleParticipantRemoved = async () => {
+            await showAlert("You have been removed from the room.", "Removed");
+            navigate("/discover");
+        };
+        const handleRoomLeft = () => navigate("/discover");
 
         socket.on("error_message", handleError);
-
-        return () => {
-            socket.off("error_message", handleError);
-        };
-    }, [navigate]);
-
-    useEffect(() => {
-        const handleNewMessage = (msg: ChatMessage) => {
-            setChatMessages((prev) => [...prev, msg]);
-        };
-        socket.on("new_chat_message", handleNewMessage);
-        return () => {
-            socket.off("new_chat_message", handleNewMessage);
-        };
-    }, []);
-
-    const sendChat = () => {
-        if (!newMessage.trim()) return;
-        socket.emit("send_chat_message", { message: newMessage.trim() });
-        setNewMessage("");
-    };
-
-
-
-    useEffect(() => {
-        const handleActionRequest = (request: any) => {
-            setActionRequests((prevRequests) => [
-                ...prevRequests,
-                request,
-            ]);
-        };
-
-        socket.on("action_request", handleActionRequest);
-
-        return () => {
-            socket.off("action_request", handleActionRequest);
-        };
-    }, []);
-
-    useEffect(() => {
-        const handleRequestApproved = (data: {
-            requestId: string;
-            action: string;
-        }) => {
-            alert(`Your ${data.action} request was approved.`);
-        };
-
-        const handleRequestRejected = (data: {
-            requestId: string;
-            action: string;
-        }) => {
-            alert(`Your ${data.action} request was rejected.`);
-        };
-
-        socket.on("request_approved", handleRequestApproved);
-        socket.on("request_rejected", handleRequestRejected);
-
-        return () => {
-            socket.off("request_approved", handleRequestApproved);
-            socket.off("request_rejected", handleRequestRejected);
-        };
-    }, []);
-
-    useEffect(() => {
-        // const handleParticipantRemoved = (data: {
-        //     roomId: string;
-        // }) => {
-        //     alert("You have been removed from the room.");
-        //     navigate("/");
-        // };
-
-        const handleParticipantRemoved = () => {
-            alert("You have been removed from the room.");
-            navigate("/");
-        };
         socket.on("participant_removed", handleParticipantRemoved);
-
-        return () => {
-            socket.off("participant_removed", handleParticipantRemoved);
-        };
-    }, [navigate]);
-
-    useEffect(() => {
-        const handleRoomLeft = () => {
-            navigate("/");
-        };
-
         socket.on("room_left", handleRoomLeft);
 
         return () => {
+            socket.off("error_message", handleError);
+            socket.off("participant_removed", handleParticipantRemoved);
             socket.off("room_left", handleRoomLeft);
         };
     }, [navigate]);
 
+    // ------------------------------------------
+    // SOCKET: PARTICIPANTS & ROLES
+    // ------------------------------------------
     useEffect(() => {
-        const handleHostChanged = (data: {
-            host: Participant;
-        }) => {
-            setParticipants((prevParticipants) =>
-                prevParticipants.map((participant) => {
-                    if (participant.socketId === data.host.socketId) {
-                        return {
-                            ...participant,
-                            role: "host",
-                        };
-                    }
+        const handleParticipantsUpdated = (data: { participants: Participant[] }) => {
+            setParticipants(data.participants);
+            const userInRoom = data.participants.find(p => p.socketId === socket.id);
+            if (userInRoom) setCurrentUser(userInRoom);
+        };
 
-                    if (participant.role === "host") {
-                        return {
-                            ...participant,
-                            role: "participant",
-                        };
-                    }
-
-                    return participant;
-                })
-            );
-
+        const handleHostChanged = (data: { host: Participant }) => {
+            setParticipants(prev => prev.map(p => {
+                if (p.socketId === data.host.socketId) return { ...p, role: "host" };
+                if (p.role === "host") return { ...p, role: "participant" };
+                return p;
+            }));
             if (currentUser?.socketId === data.host.socketId) {
-                setCurrentUser((prevUser) =>
-                    prevUser
-                        ? {
-                            ...prevUser,
-                            role: "host",
-                        }
-                        : null
-                );
+                setCurrentUser(prev => prev ? { ...prev, role: "host" } : null);
             } else if (currentUser?.role === "host") {
-                setCurrentUser((prevUser) =>
-                    prevUser
-                        ? {
-                            ...prevUser,
-                            role: "participant",
-                        }
-                        : null
-                );
+                setCurrentUser(prev => prev ? { ...prev, role: "participant" } : null);
             }
         };
 
+        socket.on("participants_updated", handleParticipantsUpdated);
         socket.on("host_changed", handleHostChanged);
 
         return () => {
+            socket.off("participants_updated", handleParticipantsUpdated);
             socket.off("host_changed", handleHostChanged);
         };
     }, [currentUser]);
 
+    // ------------------------------------------
+    // SOCKET: STATE SYNC & METADATA
+    // ------------------------------------------
     useEffect(() => {
-        const script = document.createElement("script");
-
-        script.src = "https://www.youtube.com/iframe_api";
-        script.async = true;
-
-        document.body.appendChild(script);
-
-        return () => {
-            document.body.removeChild(script);
-        };
-    }, []);
-
-
-    useEffect(() => {
-    const createPlayer = () => {
-        playerRef.current = new YT.Player("youtube-player", {
-            events: {
-                onStateChange: (event) => {
-                    if (
-                        event.data === YT.PlayerState.UNSTARTED ||
-                        event.data === YT.PlayerState.CUED
-                    ) {
-                        return;
-                    }
-
-                    if (event.data === YT.PlayerState.BUFFERING) {
-                        if (canControlRef.current && expectedRemoteState.current === null) {
-                            // User clicked progress bar natively
-                            socket.emit("seek", {
-                                currentTime: playerRef.current.getCurrentTime(),
-                            });
-                        }
-                        return;
-                    }
-
-                    if (expectedRemoteState.current === event.data) {
-                        expectedRemoteState.current = null;
-
-                        if (event.data === YT.PlayerState.PLAYING) {
-                            setIsPlaying(true);
-                        }
-
-                        if (event.data === YT.PlayerState.PAUSED) {
-                            setIsPlaying(false);
-                        }
-
-                        return;
-                    }
-
-                    expectedRemoteState.current = null;
-
-                    if (event.data === YT.PlayerState.PLAYING) {
-                        setIsPlaying(true);
-
-                        if (canControlRef.current) {
-                            socket.emit("play", {
-                                currentTime: playerRef.current.getCurrentTime(),
-                            });
-                        }
-                    }
-
-                    if (event.data === YT.PlayerState.PAUSED) {
-                        setIsPlaying(false);
-
-                        if (canControlRef.current) {
-                            socket.emit("pause", {
-                                currentTime: playerRef.current.getCurrentTime(),
-                            });
-                        }
-                    }
-                },
-                onReady: () => {
-                    setIsPlayerReady(true);
-                }
-            },
-        });
-
-        const iframe = playerRef.current.getIframe();
-
-        iframe.setAttribute("allowfullscreen", "true");
-
-        iframe.setAttribute(
-            "allow",
-            "autoplay; encrypted-media; picture-in-picture; fullscreen"
-        );
-    };
-
-    if (window.YT && window.YT.Player) {
-        createPlayer();
-    } else {
-        window.onYouTubeIframeAPIReady = createPlayer;
-    }
-
-    return () => {
-        playerRef.current?.destroy();
-    };
-}, []);
-
-    useEffect(() => {
-        const handleSyncState = (data: {
-            videoId: string;
-            playState: "playing" | "paused";
-            currentTime: number;
-            serverTime: number;
-            chatHistory?: ChatMessage[];
-        }) => {
-            syncStateRef.current = data;
-            setSyncState(data);
+        const handleSyncState = (data: any) => {
             setVideoId(data.videoId);
-            setCurrentTime(data.currentTime);
-            setIsPlaying(data.playState === "playing");
-            
-            if (data.chatHistory) {
-                setChatMessages(data.chatHistory);
-            }
+            if (data.roomName) setRoomName(data.roomName);
+            if (data.genre) setGenre(data.genre);
+            if (data.visibility) setVisibility(data.visibility);
+            if (data.chatHistory) setChatMessages(data.chatHistory);
+            if (data.queue) setQueue(data.queue);
+
+            // Apply playback state immediately to the ref
+            setTimeout(() => {
+                if (!playerRef.current) return;
+                let targetTime = data.currentTime;
+                if (data.playState === "playing") {
+                    const elapsed = (Date.now() - data.serverTime) / 1000;
+                    targetTime += elapsed;
+                    playerRef.current.seekTo(targetTime);
+                    playerRef.current.play();
+                } else {
+                    playerRef.current.seekTo(targetTime);
+                    playerRef.current.pause();
+                }
+                setCurrentTime(targetTime);
+                setIsPlaying(data.playState === "playing");
+            }, 500); // small delay to ensure player is ready
         };
+
+        const handleGenreUpdated = (newGenre: string) => setGenre(newGenre);
+        const handleVisibilityUpdated = (newVisibility: string) => setVisibility(newVisibility);
+        const handleRoomNameUpdated = (newName: string) => setRoomName(newName);
+        const handleVideoChanged = (data: { videoId: string, playState: string, currentTime: number, serverTime: number }) => {
+            setVideoId(data.videoId);
+            setIsPlaying(data.playState === "playing");
+            setCurrentTime(data.currentTime);
+            
+            // Use the explicit load API. Delay slightly to ensure player handles the change.
+            setTimeout(() => {
+                const autoplay = data.playState === "playing";
+                playerRef.current?.load(data.videoId, autoplay);
+                
+                // If it was already playing, we want it to seek as well
+                if (data.currentTime > 0) {
+                    playerRef.current?.seekTo(data.currentTime);
+                }
+            }, 50);
+        };
+        const handleQueueUpdated = (newQueue: QueueItem[]) => setQueue(newQueue);
 
         socket.on("sync_state", handleSyncState);
+        socket.on("genre_updated", handleGenreUpdated);
+        socket.on("visibility_updated", handleVisibilityUpdated);
+        socket.on("room_name_updated", handleRoomNameUpdated);
+        socket.on("change_video", handleVideoChanged);
+        socket.on("queue_updated", handleQueueUpdated);
 
         return () => {
             socket.off("sync_state", handleSyncState);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (!isPlayerReady || !syncState || !playerRef.current) {
-            return;
-        }
-
-        if (!syncState.videoId) {
-            return;
-        }
-
-        const player = playerRef.current;
-
-        let targetTime = syncState.currentTime;
-
-        if (syncState.playState === "playing") {
-            const elapsed =
-                (Date.now() - syncState.serverTime) / 1000;
-
-            targetTime += elapsed;
-        }
-
-        expectedRemoteState.current = syncState.playState === "playing" ? YT.PlayerState.PLAYING : YT.PlayerState.PAUSED;
-
-        player.loadVideoById(syncState.videoId);
-
-        setTimeout(() => {
-            if (!playerRef.current) {
-                return;
-            }
-
-            playerRef.current.seekTo(targetTime, true);
-
-            if (syncState.playState === "playing") {
-                playerRef.current.playVideo();
-            } else {
-                playerRef.current.pauseVideo();
-            }
-
-            setCurrentTime(targetTime);
-        }, 500);
-    }, [isPlayerReady, syncState]);
-
-    useEffect(() => {
-        if (!videoId || !playerRef.current) {
-            return;
-        }
-
-        // If this video came from room sync,
-        // syncState effect will handle the exact position.
-        if (syncStateRef.current?.videoId === videoId) {
-            return;
-        }
-
-        playerRef.current.loadVideoById(videoId);
-    }, [videoId]);
-
-    useEffect(() => {
-        const handleVideoChanged = (data: {
-            videoId: string;
-        }) => {
-            setVideoId(data.videoId);
-        };
-
-        socket.on("change_video", handleVideoChanged);
-
-        return () => {
+            socket.off("genre_updated", handleGenreUpdated);
+            socket.off("visibility_updated", handleVisibilityUpdated);
+            socket.off("room_name_updated", handleRoomNameUpdated);
             socket.off("change_video", handleVideoChanged);
+            socket.off("queue_updated", handleQueueUpdated);
         };
     }, []);
 
-
+    // ------------------------------------------
+    // SOCKET: SERVER PLAYBACK COMMANDS
+    // ------------------------------------------
     useEffect(() => {
         const handlePlay = () => {
-            if (!playerRef.current) {
-                return;
-            }
-
-            expectedRemoteState.current = YT.PlayerState.PLAYING;
             setIsPlaying(true);
-
-            playerRef.current.playVideo();
+            playerRef.current?.play();
         };
 
         const handlePause = () => {
-            if (!playerRef.current) {
-                return;
-            }
-
-            expectedRemoteState.current = YT.PlayerState.PAUSED;
             setIsPlaying(false);
-
-            playerRef.current.pauseVideo();
+            playerRef.current?.pause();
         };
 
         const handleSeek = (data: { currentTime: number }) => {
-            if (!playerRef.current) {
-                return;
-            }
-
             const newTime = Number(data.currentTime);
-
-            if (!Number.isFinite(newTime) || newTime < 0) {
-                return;
+            if (Number.isFinite(newTime) && newTime >= 0) {
+                playerRef.current?.seekTo(newTime);
+                setCurrentTime(newTime);
             }
-
-            expectedRemoteState.current = isPlayingRef.current ? YT.PlayerState.PLAYING : YT.PlayerState.PAUSED;
-
-            playerRef.current.seekTo(newTime, true);
-
-            setCurrentTime(newTime);
         };
 
         socket.on("play", handlePlay);
@@ -748,397 +232,215 @@ function Room() {
         };
     }, []);
 
+    // ------------------------------------------
+    // CHAT & REQUESTS
+    // ------------------------------------------
     useEffect(() => {
-        let lastTime = 0;
-
-        const updateTime = () => {
-            if (!playerRef.current || typeof playerRef.current.getCurrentTime !== 'function') {
-                return;
-            }
-
-            const player = playerRef.current;
-            const current = player.getCurrentTime();
-
-            // Detect native seek (jump > 1.5 seconds)
-            if (Math.abs(current - lastTime) > 1.5) {
-                if (canControlRef.current && expectedRemoteState.current === null) {
-                    socket.emit("seek", {
-                        currentTime: current,
-                    });
-                }
-            }
-
-            // Only update lastTime if we're actually playing to avoid drift while paused
-            if (player.getPlayerState() === YT.PlayerState.PLAYING || Math.abs(current - lastTime) > 1.5) {
-                lastTime = current;
-            } else if (player.getPlayerState() === YT.PlayerState.PAUSED) {
-                lastTime = current;
-            }
-
-            setCurrentTime(current);
-            setDuration(player.getDuration());
+        const handleNewMessage = (msg: ChatMessage) => setChatMessages(prev => [...prev, msg]);
+        const handleActionRequest = (req: any) => setActionRequests(prev => [...prev, req]);
+        const handleRequestApproved = (data: { action: string }) => showAlert(`Your ${data.action} request was approved.`);
+        const handleRequestRejected = (data: { action: string }) => showAlert(`Your ${data.action} request was rejected.`);
+        const handleReaction = (data: { emoji: string }) => {
+            const id = Math.random().toString(36).substr(2, 9) + Date.now();
+            const left = 20 + Math.random() * 60; // 20% to 80% width
+            setFloatingReactions(prev => [...prev, { id, emoji: data.emoji, left }]);
         };
 
-        const interval = setInterval(updateTime, 500);
+        socket.on("new_chat_message", handleNewMessage);
+        socket.on("action_request", handleActionRequest);
+        socket.on("request_approved", handleRequestApproved);
+        socket.on("request_rejected", handleRequestRejected);
+        socket.on("reaction", handleReaction);
 
         return () => {
-            clearInterval(interval);
+            socket.off("new_chat_message", handleNewMessage);
+            socket.off("action_request", handleActionRequest);
+            socket.off("request_approved", handleRequestApproved);
+            socket.off("request_rejected", handleRequestRejected);
+            socket.off("reaction", handleReaction);
         };
     }, []);
 
+    // ------------------------------------------
+    // LOCAL ACTION HANDLERS
+    // ------------------------------------------
+    const handleTogglePlayback = () => {
+        const action = isPlaying ? "pause" : "play";
+        if (canControl) {
+            socket.emit(action, { currentTime: playerRef.current?.getCurrentTime() || 0 });
+        } else {
+            socket.emit("request_action", { action });
+        }
+    };
+
+    const handleSeek = (time: number) => {
+        if (canControl) {
+            socket.emit("seek", { currentTime: time });
+        } else {
+            socket.emit("request_action", { action: "seek", data: { currentTime: time } });
+        }
+    };
+
+    const handleLoadVideo = (id: string) => {
+        if (canControl) {
+            socket.emit("change_video", { videoId: id });
+        } else {
+            socket.emit("request_action", { action: "change_video", data: { videoId: id } });
+        }
+    };
+
+    const handleApproveRequest = (requestId: string) => {
+        socket.emit("approve_request", { requestId });
+        setActionRequests(prev => prev.filter(r => r.requestId !== requestId));
+    };
+
+    const handleRejectRequest = (requestId: string) => {
+        socket.emit("reject_request", { requestId });
+        setActionRequests(prev => prev.filter(r => r.requestId !== requestId));
+    };
+
+    // Fullscreen behavior
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape" && isVideoMaximized) setIsVideoMaximized(false);
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [isVideoMaximized]);
+
     return (
-        <div className="room-page">
+        <div className="room-page" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#09090b' }}>
+            <RoomHeader
+                roomId={roomId}
+                roomName={roomName}
+                genre={genre}
+                visibility={visibility}
+                isHost={isHost}
+                currentUser={currentUser}
+                onUpdateGenre={(g: string) => socket.emit("update_genre", { roomId, genre: g })}
+                onUpdateVisibility={(v: string) => socket.emit("update_visibility", { roomId, visibility: v })}
+                onUpdateRoomName={(n: string) => socket.emit("update_room_name", { roomId, roomName: n })}
+                onShareRoom={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/room/${roomId}`);
+                    showAlert("Room link copied!");
+                }}
+                onLeaveRoom={async () => {
+                    const confirmed = await showConfirm("Are you sure you want to leave this room?", "Leave room?", true);
+                    if (confirmed) {
+                        socket.emit("leave_room");
+                        navigate("/discover");
+                    }
+                }}
+            />
 
-            {/* Header */}
-            <header className="room-header">
-
-                <div className="brand">
-                    <div className="brand-icon">W</div>
-                    <span>WatchTogether</span>
-                </div>
-
-                <div className="room-info">
-                    <span>ROOM</span>
-                    <strong>{roomId}</strong>
-
-
-                </div>
-
-
-                <div className="room-actions">
-
-                    <button
-                        className="share-room-button"
-                        onClick={shareRoom}
-                    >
-                        Share Room
-                    </button>
-
-                    <button
-                        onClick={leaveRoom}
-                    >
-                        Leave Room
-                    </button>
-
-                    <div className="profile-avatar">
-                        {hostInitial}
-                    </div>
-
-                </div>
-
-            </header>
-
-
-            {/* Main Room */}
             <main className="room-content">
-
-                {/* Participants */}
-                <aside className="participants-panel">
-
-                    <div className="panel-heading">
-                        <div>
-                            <span className="panel-label">PARTY CREW</span>
-                            <h2>Participants</h2>
-                        </div>
-
-                        <span className="online-count">
-                            {participants.length} online
-                        </span>
-                    </div>
-
-
-                    <div className="participants-list">
-                        {participants.map((participant) => (
-                            <div
-                                className={`participant ${participant.role === "host" ? "host" : ""
-                                    }`}
-                                key={participant.socketId}
-                            >
-                                <div className="participant-avatar">
-                                    {participant.username.charAt(0).toUpperCase()}
-                                </div>
-
-                                <div className="participant-info">
-                                    <strong>
-                                        {participant.username}
-
-                                        {currentUser?.socketId === participant.socketId && (
-                                            <span className="you-label"> You</span>
-                                        )}
-                                    </strong>
-
-                                    {participant.role === "host" && (
-                                        <span className="participant-role host">Host</span>
-                                    )}
-
-                                    {participant.role === "moderator" && (
-                                        <span className="participant-role moderator">Moderator</span>
-                                    )}
-                                </div>
-
-                                {isHost &&
-                                    currentUser?.socketId !== participant.socketId && (
-                                        <div className="participant-actions">
-                                            {participant.role === "participant" && (
-                                                <button className="moderator-btn" onClick={() => makeModerator(participant.socketId)}>
-                                                    Make Moderator
-                                                </button>
-                                            )}
-
-                                            <button className="remove" onClick={() => removeParticipant(participant.socketId)}>
-                                                Remove
-                                            </button>
-                                        </div>
-                                    )}
-
-                                <div className="online-dot"></div>
-                            </div>
-                        ))}
-                    </div>
-
-                </aside>
-
-
-                {/* Player */}
-                <section className={`player-section ${isVideoMaximized ? "video-maximized" : ""}`}>
-
-                    <div className="player-header">
-                        <div>
-                            <span>NOW WATCHING</span>
-                            <h2>Ready to watch together?</h2>
-                        </div>
-
-                        <div className="sync-badge">
-                            <span></span>
-                            SYNCED
-                        </div>
-                    </div>
-
-
-                    {canControl && actionRequests.length > 0 && (
-                        <div className="request-panel">
-                            <h3>Pending Requests</h3>
-
-                            {actionRequests.map((request) => (
-                                <div
-                                    className="request-item"
-                                    key={request.requestId}
-                                >
-                                    <div>
-                                        <strong>
-                                            {request.username}
-                                        </strong>
-
-                                        <span>
-                                            {" "}requested {request.action}
-                                        </span>
-                                    </div>
-
-                                    <div className="request-actions">
-                                        <button
-                                            onClick={() =>
-                                                approveRequest(request.requestId)
-                                            }
-                                        >
-                                            Approve
-                                        </button>
-
-                                        <button
-                                            onClick={() =>
-                                                rejectRequest(request.requestId)
-                                            }
-                                        >
-                                            Reject
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    <div className="video-input">
-                        <input
-                            type="text"
-                            placeholder="Paste YouTube URL..."
-                            value={videoUrl}
-                            onChange={(e) => setVideoUrl(e.target.value)}
+                <div className="room-video-area">
+                    <div className="youtube-placeholder" style={{ width: '100%', aspectRatio: '16/9', position: 'relative', borderRadius: '12px', overflow: 'hidden', background: '#000', marginBottom: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+                        <FloatingReactions 
+                            reactions={floatingReactions} 
+                            onComplete={(id) => setFloatingReactions(prev => prev.filter(r => r.id !== id))} 
                         />
-
-                        <button onClick={loadVideo}>
-                            Load Video
-                        </button>
-                    </div>
-
-
-                    <div className="youtube-placeholder">
-                        <div id="youtube-player"></div>
-
-                        {!hasVideo && (
-                            <div className="empty-player">
-                                <div className="empty-player-icon">▶</div>
-                                <h3>No video loaded</h3>
-                                <p>Paste a YouTube URL above to start watching</p>
-                            </div>
-                        )}
-
-                        {hasVideo && !canControl && (
-                            <div className="player-interaction-blocker"></div>
-                        )}
-                    </div>
-
-
-                    <div className={`player-controls ${!hasVideo ? "controls-disabled" : ""}`}>
-
-                        <div
-                            className="progress-bar"
-                            onClick={(e) => {
-                                if (!hasVideo || !duration || !playerRef.current) {
-                                    return;
-                                }
-
-                                const rect = e.currentTarget.getBoundingClientRect();
-
-                                const clickPosition =
-                                    (e.clientX - rect.left) / rect.width;
-
-                                const newTime = Math.max(
-                                    0,
-                                    Math.min(duration, clickPosition * duration)
-                                );
-
-                                seekVideo(newTime);
-                            }}
-                        >
-                            <span
-                                style={{
-                                    width: `${duration ? (currentTime / duration) * 100 : 0}%`,
+                        {hasVideo ? (
+                            <YouTubePlayer
+                                ref={playerRef}
+                                videoId={videoId}
+                                onTimeUpdate={(time: number, dur: number) => {
+                                    setCurrentTime(time);
+                                    setDuration(dur);
                                 }}
-                            ></span>
-                        </div>
+                                onReady={() => {
+                                    // Player ready logic if needed
+                                }}
+                                onEnded={() => {
+                                    if (canControl) {
+                                        socket.emit("video_ended", { videoId });
+                                    }
+                                }}
+                            />
+                        ) : (
+                            <div className="empty-player">
+                                {/* Subtle ambient glow behind icon */}
+                                <div className="empty-player-glow" />
 
-                        <div className="controls-row">
-
-                            <div className="left-controls">
-                                <button onClick={togglePlayback} disabled={!hasVideo}>
-                                    {isPlaying ? "❚❚" : "▶"}
-                                </button>
-
-                                <span>
-                                    {formatTime(currentTime)} / {formatTime(duration)}
-                                </span>
-                            </div>
-
-                            <div className="right-controls">
-
-                                <div className="quality-control">
-                                    <button
-                                        onClick={() =>
-                                            setShowQualityMenu(!showQualityMenu)
-                                        }
-                                        disabled={!hasVideo}
-                                    >
-                                        ⚙
-                                    </button>
-
-                                    {showQualityMenu && (
-                                        <div className="quality-menu">
-                                            <button onClick={() => changeQuality("small")}>
-                                                360p
-                                            </button>
-
-                                            <button onClick={() => changeQuality("medium")}>
-                                                480p
-                                            </button>
-
-                                            <button onClick={() => changeQuality("hd720")}>
-                                                720p
-                                            </button>
-
-                                            <button onClick={() => changeQuality("hd1080")}>
-                                                1080p
-                                            </button>
-                                        </div>
-                                    )}
+                                {/* Icon container */}
+                                <div className="empty-player-icon-wrap">
+                                    <svg className="empty-player-play-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <polygon points="6,4 20,12 6,20" fill="currentColor" />
+                                    </svg>
                                 </div>
 
-                                <button onClick={toggleFullscreen} disabled={!hasVideo}>
-                                    ⛶
-                                </button>
-
+                                <h3 className="empty-player-title">No video loaded</h3>
+                                <p className="empty-player-subtitle">Paste a YouTube URL below to start watching</p>
                             </div>
+                        )}
+                    </div>
 
+                    <div className="now-playing-section">
+                        <div className="now-playing-meta">
+                            {hasVideo && (
+                                <img src={`https://img.youtube.com/vi/${videoId}/default.jpg`} style={{ width: '72px', height: '40px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} alt="Thumbnail" />
+                            )}
+                            <div style={{ minWidth: 0 }}>
+                                <span className="now-playing-label">Now playing</span>
+                                <h2 className="now-playing-title">{hasVideo ? "YouTube Video" : "Ready to watch together?"}</h2>
+                            </div>
                         </div>
-
+                        <ReactionBar onReact={(emoji) => {
+                            const id = Math.random().toString(36).substr(2, 9) + Date.now();
+                            const left = 20 + Math.random() * 60;
+                            setFloatingReactions(prev => [...prev, { id, emoji, left }]);
+                            socket.emit("send_reaction", { emoji });
+                        }} />
                     </div>
 
-                </section>
+                    <VideoControls
+                        isPlaying={isPlaying}
+                        currentTime={currentTime}
+                        duration={duration}
+                        hasVideo={hasVideo}
+                        onTogglePlayback={handleTogglePlayback}
+                        onSeek={handleSeek}
+                        onChangeQuality={(q: string) => playerRef.current?.setQuality(q)}
+                        onToggleFullscreen={() => setIsVideoMaximized(!isVideoMaximized)}
+                    />
 
-
-                {/* Chat */}
-                <aside className="chat-panel">
-
-                    <div className="panel-heading">
-                        <div>
-                            <span className="panel-label">ROOM</span>
-                            <h2>Live Chat</h2>
-                        </div>
-
-                        <span className="chat-status">
-                            ● LIVE
-                        </span>
+                    <div className="video-input-wrapper" style={{ marginTop: '8px' }}>
+                        <VideoInput onLoadVideo={handleLoadVideo} />
                     </div>
+                </div>
 
-
-                    <div className="chat-messages">
-                        {chatMessages.map((msg, index) => {
-                            const isCurrentUser = msg.username === localStorage.getItem("watchPartyUsername");
-                            const showAvatar = index === 0 || chatMessages[index - 1].username !== msg.username;
-                            const accentColor = getColorForUsername(msg.username);
-
-                            return (
-                                <div 
-                                    className={`chat-message ${isCurrentUser ? 'current-user-message' : ''} ${!showAvatar ? 'consecutive-message' : ''}`} 
-                                    key={msg.id}
-                                    style={{ "--accent-color": accentColor } as React.CSSProperties}
-                                >
-                                    {showAvatar ? (
-                                        <div className="chat-avatar" style={{ backgroundColor: accentColor }}>
-                                            {msg.username.charAt(0)}
-                                        </div>
-                                    ) : (
-                                        <div className="chat-avatar-placeholder"></div>
-                                    )}
-                                    <div className="chat-message-content">
-                                        {showAvatar && <strong>{msg.username}</strong>}
-                                        <p>{msg.message}</p>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    <div className="chat-input">
-                        <input
-                            type="text"
-                            placeholder="Send a message..."
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") sendChat();
-                            }}
-                        />
-
-                        <button onClick={sendChat}>
-                            →
-                        </button>
-                    </div>
-
-                </aside>
-
+                <div className="room-panel-area">
+                    <RoomPanel
+                        canControl={canControl}
+                        pendingRequestsCount={actionRequests.length}
+                        participantsProps={{
+                            participants,
+                            currentUser,
+                            isHost,
+                            onMakeModerator: (id: string) => socket.emit("assign_moderator", { targetSocketId: id }),
+                            onRemoveParticipant: (id: string) => socket.emit("remove_participant", { targetSocketId: id })
+                        }}
+                        chatProps={{
+                            messages: chatMessages,
+                            currentUserId: user?.id,
+                            onSendMessage: (msg: string) => socket.emit("send_chat_message", { message: msg })
+                        }}
+                        requestsProps={{
+                            requests: actionRequests,
+                            canControl,
+                            onApprove: handleApproveRequest,
+                            onReject: handleRejectRequest
+                        }}
+                        queueProps={{
+                            queue,
+                            canControl,
+                            onAddVideo: (vid: string, title: string) => socket.emit("queue_add", { videoId: vid, title }),
+                            onRemove: (id: string) => socket.emit("queue_remove", { id }),
+                            onPlayNow: (id: string) => socket.emit("queue_play_now", { id })
+                        }}
+                    />
+                </div>
             </main>
-
         </div>
     );
 }
-
-export default Room;

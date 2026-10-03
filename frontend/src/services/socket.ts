@@ -6,6 +6,8 @@ const SOCKET_URL = import.meta.env.PROD
     ? (import.meta.env.VITE_BACKEND_URL || window.location.origin) 
     : "http://localhost:4000";
 
-const socket = io(SOCKET_URL);
+const socket = io(SOCKET_URL, {
+    withCredentials: true
+});
 
 export default socket;
