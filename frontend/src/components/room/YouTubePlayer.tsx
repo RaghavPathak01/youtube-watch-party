@@ -16,10 +16,11 @@ interface YouTubePlayerProps {
     onReady: () => void;
     onEnded?: () => void;
     onTitleUpdate?: (title: string) => void;
+    onPlayStateChange?: (isPlaying: boolean) => void;
 }
 
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
-    ({ videoId, onTimeUpdate, onReady, onEnded, onTitleUpdate }, ref) => {
+    ({ videoId, onTimeUpdate, onReady, onEnded, onTitleUpdate, onPlayStateChange }, ref) => {
         const playerRef = useRef<YT.Player | null>(null);
         const containerRef = useRef<HTMLDivElement>(null);
         const timeUpdateInterval = useRef<number | null>(null);
@@ -92,7 +93,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
                         },
                         onStateChange: (event: any) => {
                             checkAndEmitTitle();
-                            if (event.data === window.YT.PlayerState.PLAYING) {
+                            const isPlayingNow = event.data === window.YT.PlayerState.PLAYING;
+                            onPlayStateChange?.(isPlayingNow);
+                            
+                            if (isPlayingNow) {
                                 if (timeUpdateInterval.current) clearInterval(timeUpdateInterval.current);
                                 timeUpdateInterval.current = window.setInterval(() => {
                                     if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') {

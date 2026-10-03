@@ -243,7 +243,16 @@ export default function Room() {
     // ------------------------------------------
     useEffect(() => {
         const handleNewMessage = (msg: ChatMessage) => setChatMessages(prev => [...prev, msg]);
-        const handleActionRequest = (req: any) => setActionRequests(prev => [...prev, req]);
+        const handleActionRequest = (req: any) => {
+            setActionRequests(prev => [...prev, req]);
+            setChatMessages(prev => [...prev, {
+                id: `sys-${Date.now()}-${Math.random()}`,
+                senderId: "system",
+                senderName: "System",
+                text: `${req.username} requested to ${req.action}. Check the Requests tab.`,
+                timestamp: Date.now()
+            }]);
+        };
         const handleRequestApproved = (data: { action: string }) => showAlert(`Your ${data.action} request was approved.`);
         const handleRequestRejected = (data: { action: string }) => showAlert(`Your ${data.action} request was rejected.`);
         const handleReaction = (data: { emoji: string }) => {
@@ -273,6 +282,9 @@ export default function Room() {
     const handleTogglePlayback = () => {
         const action = isPlaying ? "pause" : "play";
         if (canControl) {
+            if (action === "play") playerRef.current?.play();
+            else playerRef.current?.pause();
+            setIsPlaying(action === "play");
             socket.emit(action, { currentTime: playerRef.current?.getCurrentTime() || 0 });
         } else {
             socket.emit("request_action", { action });
@@ -281,6 +293,8 @@ export default function Room() {
 
     const handleSeek = (time: number) => {
         if (canControl) {
+            playerRef.current?.seekTo(time);
+            setCurrentTime(time);
             socket.emit("seek", { currentTime: time });
         } else {
             socket.emit("request_action", { action: "seek", data: { currentTime: time } });
@@ -289,6 +303,8 @@ export default function Room() {
 
     const handleLoadVideo = (id: string) => {
         if (canControl) {
+            playerRef.current?.load(id, true);
+            setVideoId(id);
             socket.emit("change_video", { videoId: id });
         } else {
             socket.emit("request_action", { action: "change_video", data: { videoId: id } });
@@ -358,6 +374,7 @@ export default function Room() {
                                     // Player ready logic if needed
                                 }}
                                 onTitleUpdate={setVideoTitle}
+                                onPlayStateChange={(playing) => setIsPlaying(playing)}
                                 onEnded={() => {
                                     if (canControl) {
                                         socket.emit("video_ended", { videoId });
