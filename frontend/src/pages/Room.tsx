@@ -385,7 +385,7 @@ export default function Room() {
                     <div className="now-playing-section">
                         <div className="now-playing-meta">
                             {hasVideo && (
-                                <img src={`https://img.youtube.com/vi/${videoId}/default.jpg`} style={{ width: '72px', height: '40px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} alt="Thumbnail" />
+                                <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} style={{ width: '72px', height: '40px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} alt="Thumbnail" />
                             )}
                             <div style={{ minWidth: 0, overflow: 'hidden' }}>
                                 <span className="now-playing-label">Now playing</span>

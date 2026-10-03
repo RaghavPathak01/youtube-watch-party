@@ -676,7 +676,7 @@ const pauseVideo = (room, providedTime) => {
     return;
   }
 
-  changeVideo(room, cleanVideoId);
+  changeVideo(room, cleanVideoId, true);
 });
 
 // request action 
