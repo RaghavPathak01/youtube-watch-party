@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "../context/AuthContext";
+import { API_URL } from "../config";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -55,7 +56,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     setIsLoading(true);
 
-    const url = isLogin ? `${import.meta.env.VITE_BACKEND_URL}/auth/login` : `${import.meta.env.VITE_BACKEND_URL}/auth/signup`;
+    const url = isLogin ? `${API_URL}/auth/login` : `${API_URL}/auth/signup`;
     const body = isLogin ? { email, password } : { name, email, password };
 
     try {

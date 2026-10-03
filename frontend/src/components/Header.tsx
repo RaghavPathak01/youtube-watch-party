@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AuthModal } from "./AuthModal";
 import { useAuth } from "../context/AuthContext";
+import { API_URL } from "../config";
 
 export function Header() {
   const location = useLocation();
@@ -66,7 +67,7 @@ export function Header() {
               <button 
                 className="primary-btn desktop-logout-btn" 
                 onClick={async () => {
-                  await fetch(`${import.meta.env.VITE_BACKEND_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
+                  await fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
                   setUser(null);
                 }}
                 style={{ padding: '6px 12px', fontSize: '13px', background: 'transparent', border: '1px solid #3f3f46' }}
@@ -112,7 +113,7 @@ export function Header() {
                 <button 
                   className="primary-btn mobile-logout-btn" 
                   onClick={async () => {
-                    await fetch(`${import.meta.env.VITE_BACKEND_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
+                    await fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
                     setUser(null);
                     setIsMobileMenuOpen(false);
                   }}

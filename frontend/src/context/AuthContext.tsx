@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { API_URL } from '../config';
 
 interface User {
   id: string;
@@ -24,7 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Check if the user is logged in via HttpOnly cookie
-    fetch(`${import.meta.env.VITE_BACKEND_URL}/auth/me`, { credentials: 'include' })
+    fetch(`${API_URL}/auth/me`, { credentials: 'include' })
       .then(res => {
         if (!res.ok) throw new Error('Not authenticated');
         return res.json();
