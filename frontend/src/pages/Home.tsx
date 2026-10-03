@@ -275,7 +275,7 @@ export default function Home() {
         <div className="footer-top">
           <div className="footer-brand">
             <div className="brand" style={{ gap: '10px', fontSize: '1.2rem' }}>
-              <img src="https://em-content.zobj.net/source/apple/354/clapper-board_1f3ac.png" alt="WatchTogether Logo" style={{ width: '28px', height: '28px' }} />
+              <img src="/logo.png" alt="WatchTogether Logo" style={{ width: '28px', height: '28px' }} />
               <span>WatchTogether</span>
             </div>
             <p style={{ marginTop: '16px', color: '#a1a1aa' }}>Experience videos together in real-time.</p>

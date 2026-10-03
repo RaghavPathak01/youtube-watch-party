@@ -39,7 +39,7 @@ export function Header() {
   return (
     <header className="topbar">
       <div className="brand header-brand">
-        <img src="https://em-content.zobj.net/source/apple/354/clapper-board_1f3ac.png" alt="WatchTogether Logo" style={{ width: '28px', height: '28px' }} />
+        <img src="/logo.png" alt="WatchTogether Logo" style={{ width: '28px', height: '28px' }} />
         <span>WatchTogether</span>
       </div>
 
