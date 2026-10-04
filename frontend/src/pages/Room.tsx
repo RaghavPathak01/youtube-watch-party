@@ -255,9 +255,9 @@ export default function Room() {
             setActionRequests(prev => [...prev, req]);
             setChatMessages(prev => [...prev, {
                 id: `sys-${Date.now()}-${Math.random()}`,
-                senderId: "system",
-                senderName: "System",
-                text: `${req.username} requested to ${req.action}. Check the Requests tab.`,
+                userId: "system",
+                username: "System",
+                message: `${req.username} requested to ${req.action}. Check the Requests tab.`,
                 timestamp: Date.now()
             }]);
         };
