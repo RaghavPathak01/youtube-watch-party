@@ -370,7 +370,7 @@ export default function Room() {
                             reactions={floatingReactions} 
                             onComplete={(id) => setFloatingReactions(prev => prev.filter(r => r.id !== id))} 
                         />
-                        {hasVideo ? (
+                        <div style={{ display: hasVideo ? 'block' : 'none', width: '100%', height: '100%' }}>
                             <YouTubePlayer
                                 ref={playerRef}
                                 videoId={videoId}
@@ -398,7 +398,8 @@ export default function Room() {
                                     }
                                 }}
                             />
-                        ) : (
+                        </div>
+                        {!hasVideo && (
                             <div className="empty-player">
                                 {/* Subtle ambient glow behind icon */}
                                 <div className="empty-player-glow" />
