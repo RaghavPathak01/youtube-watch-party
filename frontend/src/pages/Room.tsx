@@ -51,6 +51,11 @@ export default function Room() {
     const isModerator = currentUser?.role === "moderator";
     const canControl = isHost || isModerator;
 
+    const latestStateRef = useRef({ isPlaying: false, currentTime: 0 });
+    useEffect(() => {
+        latestStateRef.current = { isPlaying, currentTime };
+    }, [isPlaying, currentTime]);
+
     // Reset title when video is removed
     useEffect(() => {
         if (!videoId) setVideoTitle("");
@@ -171,20 +176,23 @@ export default function Room() {
         const handleVisibilityUpdated = (newVisibility: string) => setVisibility(newVisibility);
         const handleRoomNameUpdated = (newName: string) => setRoomName(newName);
         const handleVideoChanged = (data: { videoId: string, playState: string, currentTime: number, serverTime: number }) => {
-            setVideoId(data.videoId);
+            setVideoId((prev) => {
+                // Use the explicit load API if the video actually changed or player is already ready
+                if (prev !== data.videoId) {
+                    setTimeout(() => {
+                        const autoplay = data.playState === "playing";
+                        playerRef.current?.load(data.videoId, autoplay);
+                        
+                        // If it was already playing, we want it to seek as well
+                        if (data.currentTime > 0) {
+                            playerRef.current?.seekTo(data.currentTime);
+                        }
+                    }, 50);
+                }
+                return data.videoId;
+            });
             setIsPlaying(data.playState === "playing");
             setCurrentTime(data.currentTime);
-            
-            // Use the explicit load API. Delay slightly to ensure player handles the change.
-            setTimeout(() => {
-                const autoplay = data.playState === "playing";
-                playerRef.current?.load(data.videoId, autoplay);
-                
-                // If it was already playing, we want it to seek as well
-                if (data.currentTime > 0) {
-                    playerRef.current?.seekTo(data.currentTime);
-                }
-            }, 50);
         };
         const handleQueueUpdated = (newQueue: QueueItem[]) => setQueue(newQueue);
 
@@ -371,7 +379,16 @@ export default function Room() {
                                     setDuration(dur);
                                 }}
                                 onReady={() => {
-                                    // Player ready logic if needed
+                                    // Player ready logic: apply latest authoritative state
+                                    const state = latestStateRef.current;
+                                    if (state.currentTime > 0) {
+                                        playerRef.current?.seekTo(state.currentTime);
+                                    }
+                                    if (state.isPlaying) {
+                                        playerRef.current?.play();
+                                    } else {
+                                        playerRef.current?.pause();
+                                    }
                                 }}
                                 onTitleUpdate={setVideoTitle}
                                 onPlayStateChange={(playing) => setIsPlaying(playing)}

@@ -93,7 +93,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
                         },
                         onStateChange: (event: any) => {
                             checkAndEmitTitle();
-                            const isPlayingNow = event.data === window.YT.PlayerState.PLAYING;
+                            const isPlayingNow = event.data === window.YT.PlayerState.PLAYING || event.data === window.YT.PlayerState.BUFFERING;
                             onPlayStateChange?.(isPlayingNow);
                             
                             if (isPlayingNow) {
